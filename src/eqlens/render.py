@@ -17,6 +17,7 @@ import json
 import re
 from collections.abc import Sequence
 
+from eqlens.constants import defines as constant_defines
 from eqlens.credit import LOGO_PNG_BASE64, SIZE, URL
 from eqlens.engine import FONTS, FormulaError, Group, Run, Scene, box, has_ink, layout, parses, place, to_png, to_svg
 from eqlens.legend import Block, Symbol, occurrences, plan
@@ -84,6 +85,8 @@ def render(
     tier: Sequence[str] = (),
     credit: bool = True,
     known: bool | None = None,
+    constant: Sequence[str] = (),
+    shared: Sequence[str] = (),
     _disclose: str | None = None,
 ) -> bytes:
     """Draw ``tex`` as ``svg``, ``png``, or ``html`` bytes.
@@ -104,7 +107,11 @@ def render(
     ``credit`` puts the small eqlens mark, a link, in the corner of an SVG card.
     ``known`` opens symbols whose meaning is a well-known formula, such as h bar
     into h over 2 pi. Left as None it is on for ``html``, where tiers start shut,
-    and off for ``svg`` and ``png``, where they would make every card taller. ``font`` is one of ``sans``, ``serif``,
+    and off for ``svg`` and ``png``, where they would make every card taller.
+    ``constant`` names constants from the built-in table, such as ``c`` or
+    ``k_B``: each gets its meaning and value without anyone typing a number.
+    ``shared`` is ``"KEY=meaning"`` items from a symbols file: one is used only
+    where its symbol appears, and ``define`` wins for the same symbol. ``font`` is one of ``sans``, ``serif``,
     ``stix``, ``cm``. ``dpi`` only matters for PNG.
     """
     if fmt not in ("svg", "png", "html"):
@@ -120,13 +127,15 @@ def render(
         bg = _check_color(bg, "bg")
     text = normalize_tex(tex)
     notes = [note.strip() for note in notes if note and note.strip()]
-    define = [item for item in define if item and item.strip()]
+    # A constant is a define the library writes; one of the caller's own for the same symbol is read later and wins.
+    define = constant_defines(constant) + [item for item in define if item and item.strip()]
+    shared = [item for item in shared if item and item.strip()]
 
     tier = [item for item in tier if item and item.strip()]
 
     if fmt == "html":
         options = dict(dpi=dpi, color=color, bg=bg, legend=legend, notes=notes, define=define, font=font)
-        options.update(brief=brief, tips=tips, credit=credit)
+        options.update(brief=brief, tips=tips, credit=credit, shared=shared)
         opens = known is not False
         wide = render(text, "svg", tier=tier, known=opens, _disclose="open", **options).decode("utf-8")
         if _tiers(wide):
@@ -137,7 +146,7 @@ def render(
         return _html(text[1:-1].strip(), shut, wide).encode("utf-8")
 
     formula = layout(text, _FORMULA, font)
-    top, rows = plan(text[1:-1], legend=legend or brief, define=define, tier=tier, brief=brief, known=bool(known))
+    top, rows = plan(text[1:-1], legend=legend or brief, define=define, tier=tier, brief=brief, known=bool(known), shared=shared)
     card = bool(rows or notes)
     if card:
         bg = bg or _CARD
@@ -149,7 +158,7 @@ def render(
         # Room under the last line, then the mark in the corner.
         scene.height += 14.0
         mark = (scene.width - SIZE - 8.0, scene.height - SIZE - 8.0, SIZE, URL, LOGO_PNG_BASE64)
-    seed = json.dumps([text, legend, brief, notes, define, tier, color, bg, font, tips, credit, bool(known), _disclose])
+    seed = json.dumps([text, legend, brief, notes, define, shared, tier, color, bg, font, tips, credit, bool(known), _disclose])
     uid = "eq" + hashlib.sha1(seed.encode("utf-8")).hexdigest()[:8]
     return to_svg(scene, uid=uid, label=text[1:-1].strip(), fg=color, bg=bg, tips=tips, credit=mark).encode("utf-8")
 
@@ -291,7 +300,7 @@ def _ledger(
             # A triangle after the name: pointing right when shut, down when open.
             group.extra = "x"
             arrow = layout(r"$\blacktriangleright$" if disclose == "shut" else r"$\blacktriangledown$", 8.0, font)
-            sign = Group("d", syms=(index,))
+            sign = Group("v", syms=(index,))
             at = text_x + main.width + (7.0 if main.width else 0.0)
             _add(sign, arrow, at, top + ascent - 1.0, "dim")
             scene.groups.append(sign)

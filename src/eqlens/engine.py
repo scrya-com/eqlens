@@ -94,8 +94,9 @@ class Group:
     """Marks that hover together: one formula glyph, one ledger row, or the notes.
 
     ``kind`` is ``f`` for a formula, ``r`` for a ledger row, ``n`` for notes,
-    ``t`` for the rule down the side of a tier, and ``d`` for the small triangle
-    that says a row opens. ``extra`` is one more class; ``x`` marks what can be
+    ``t`` for the rule down the side of a tier, and ``v`` for the small triangle
+    that says a row opens. (``d`` and ``k`` are taken: they are the fill classes
+    for dim and mark-colored ink, and a kind must never share a name with one.) ``extra`` is one more class; ``x`` marks what can be
     clicked to open or shut the tiers.
     ``syms`` are the indexes of the symbols this group belongs to.
     """
@@ -237,11 +238,11 @@ def to_svg(
     ]
     if bg:
         css.append(f".{uid} .bg{{fill:var(--eq-bg,{bg})}}")
-    if any(group.kind == "d" for group in scene.groups):
+    if any(group.kind == "v" for group in scene.groups):
         # The triangle shows when its symbol is pointed at, and always where there is no pointer.
         css += [
-            f".{uid} .d{{opacity:0;transition:opacity .12s}}",
-            f"@media (hover:none){{.{uid} .d{{opacity:.7}}}}",
+            f".{uid} .v{{opacity:0;transition:opacity .12s}}",
+            f"@media (hover:none){{.{uid} .v{{opacity:.7}}}}",
             f".{uid} .x{{cursor:pointer}}",
         ]
     if count:

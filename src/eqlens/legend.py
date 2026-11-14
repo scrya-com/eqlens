@@ -486,6 +486,7 @@ def plan(
     tier: Sequence[str] = (),
     brief: bool = False,
     known: bool = False,
+    shared: Sequence[str] = (),
 ) -> tuple[Block, list[Symbol]]:
     """The formula, its rows, and the tiers its symbols open into.
 
@@ -498,6 +499,9 @@ def plan(
     ``known`` also opens the symbols whose meaning is a formula everyone uses:
     h bar into h over 2 pi, and the Laplacian into its second derivatives. A
     ``tier`` item for the same symbol wins.
+
+    ``shared`` is more ``"KEY=meaning"`` items, from a symbols file. One is used
+    only where its symbol appears, and a ``define`` for the same symbol wins.
     """
     tiers: dict[tuple, tuple[str, str]] = {}
     if known:
@@ -514,7 +518,10 @@ def plan(
             raise FormulaError(f"--tier cannot read the formula for {key}")
         tiers[_shape(key)] = (key, inside)
 
-    define = [item for item in define if item and item.strip()]
+    # Shared items go first, so a define for the same symbol is read after and wins.
+    own = [item for item in define if item and item.strip()]
+    define = [item for item in shared if item and item.strip()] + own
+    borrowed = len(define) - len(own)
     keys = [item.partition("=")[0].strip().strip("$").strip() for item in define]
     registry: list[Symbol] = []
     index_of: dict[tuple, int] = {}
@@ -569,7 +576,7 @@ def plan(
 
     top = build(tex, frozenset())
     # A definition for a symbol that is nowhere still gets its row, as it always did.
-    left = [define[i] for i in range(len(define)) if i not in spent]
+    left = [define[i] for i in range(borrowed, len(define)) if i not in spent]
     for row in symbols(tex, legend=False, define=left) if left else []:
         if _shape(row.key) not in index_of:
             if row.key[1:] not in _BY_COMMAND:

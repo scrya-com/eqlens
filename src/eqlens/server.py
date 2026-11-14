@@ -93,7 +93,7 @@ class Handler(BaseHTTPRequestHandler):
         fmt, content_type = _TYPES[path]
         dpi, color, bg = fields.get("dpi"), fields.get("color"), fields.get("bg")
         kwargs = {}
-        for name in ("notes", "define", "tier"):
+        for name in ("notes", "define", "tier", "constant", "shared"):
             value = fields.get(name) or []
             if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
                 self._json(400, {"error": f"{name} must be a list of strings"})

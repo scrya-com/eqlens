@@ -17,6 +17,8 @@ import json
 import os
 from collections.abc import Sequence
 
+from eqlens.constants import CONSTANTS
+from eqlens.constants import defines as constant_defines
 from eqlens.engine import FormulaError, layout, parses
 from eqlens.legend import Block, Symbol, _shape, occurrences, plain, plan
 from eqlens.render import normalize_tex
@@ -86,14 +88,35 @@ class IntrospectError(FormulaError):
     """Claude could not be asked, or did not answer."""
 
 
-def inspect(tex: str, define: Sequence[str] = (), tier: Sequence[str] = ()) -> dict:
+def inspect(
+    tex: str,
+    define: Sequence[str] = (),
+    tier: Sequence[str] = (),
+    *,
+    constant: Sequence[str] = (),
+    shared: Sequence[str] = (),
+) -> dict:
     """What is in ``tex``: each ledger row, how it is said, what it means, and how often it appears.
 
-    A symbol that opens into a tier carries ``"tier"``: that formula and its own rows, in the same form.
+    A symbol that opens into a tier carries ``"tier"``: that formula and its own
+    rows, in the same form. ``"could_be"`` lists symbols that are written like a
+    constant the library knows and have no meaning yet. Whether one is that
+    constant is for the caller to say, with ``--constant``.
     """
     text = normalize_tex(tex)[1:-1].strip()
-    top, rows = plan(text, define=define, tier=tier, known=True)
-    return _describe(top, rows)
+    define = constant_defines(constant) + list(define)
+    top, rows = plan(text, define=define, tier=tier, known=True, shared=shared)
+    found = _describe(top, rows)
+    formula = layout(f"${text}$", 22)
+    meant = {_shape(row.key) for row in rows if row.hint and row.defined}
+    could = [
+        {"key": symbol, "constant": name, "is": what}
+        for name, (symbol, what, _exact, _value) in CONSTANTS.items()
+        if _shape(symbol) not in meant and occurrences(formula, symbol)
+    ]
+    if could:
+        found["could_be"] = could
+    return found
 
 
 def _describe(block: Block, rows: list[Symbol]) -> dict:
@@ -130,6 +153,8 @@ def introspect(
     context: str = "",
     define: Sequence[str] = (),
     tier: Sequence[str] = (),
+    constant: Sequence[str] = (),
+    shared: Sequence[str] = (),
     model: str | None = None,
     client=None,
 ) -> dict:
@@ -141,7 +166,7 @@ def introspect(
     a sentence or two about where the formula comes from. ``client`` is an
     ``anthropic.Anthropic``; one is made when it is left out.
     """
-    found = inspect(tex, define, tier)
+    found = inspect(tex, define, tier, constant=constant, shared=shared)
     text = found["tex"]
     formula = layout(f"${text}$", 22)
     answer = _ask(text, _keys(found), context, model or os.environ.get("EQLENS_MODEL") or MODEL, client)
@@ -149,9 +174,11 @@ def introspect(
     def key_of(item: str) -> str:
         return item.partition("=")[0].strip().strip("$").strip()
 
-    own = [item for item in define if item and item.strip()]
+    own = constant_defines(constant) + [item for item in define if item and item.strip()]
     own_tiers = [item for item in tier if item and item.strip()]
     taken = {_shape(key_of(item)) for item in own}
+    # What a symbols file already says about a part of this formula stands too.
+    taken |= {_shape(row["key"]) for row in _keys(found) if row["means"] and row["defined"]}
     opened = {_shape(key_of(item)) for item in own_tiers}
     added: list[str] = []
     tiers: list[str] = []

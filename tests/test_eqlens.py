@@ -451,17 +451,17 @@ class TierTests(unittest.TestCase):
         page = render_html(self.TEX, define=["P=keeps the coarse part"], tier=self.TIERS)
         shut, wide = page.split('<div class="eqlens-open" hidden>')
         # Shut: one triangle, on P. Its row and both of its glyphs in the formula can be clicked.
-        self.assertEqual(len(re.findall(r'<g class="d s0 h">', shut)), 1)
+        self.assertEqual(len(re.findall(r'<g class="v s0 h">', shut)), 1)
         self.assertEqual(len(re.findall(r'<g class="r s0 h x">', shut)), 1)
         self.assertEqual(len(re.findall(r'<g class="f s0 h x">', shut)), 2)
-        self.assertEqual(len(re.findall(r'<g class="d ', shut)), 1)
+        self.assertEqual(len(re.findall(r'<g class="v ', shut)), 1)
         # Open: P and A_e each have a triangle, now for shutting.
-        self.assertEqual(len(re.findall(r'<g class="d ', wide)), 2)
+        self.assertEqual(len(re.findall(r'<g class="v ', wide)), 2)
         self.assertIn("@media (hover:none)", shut)
         self.assertIn("flip(", page)
         # A drawing on its own has nothing to click.
         alone = render_svg(self.TEX, define=["P=keeps the coarse part"], tier=self.TIERS)
-        self.assertNotIn('class="d ', alone)
+        self.assertNotIn('class="v ', alone)
         self.assertNotIn(" x\"", alone)
 
     def test_a_letter_is_not_the_bigger_symbol_it_sits_in(self):
@@ -491,6 +491,14 @@ class TierTests(unittest.TestCase):
         self.assertEqual(row.tip, "Lambda. the cosmological constant, about 1.1×10^-52 m^-2")
         self.assertTrue(render_svg(r"\Lambda g", define=[meaning]))
         self.assertIn("1.055", dict((key, hint) for key, _name, hint in named_in(r"\hbar"))[r"\hbar"])
+
+    def test_the_triangle_never_shares_a_class_with_the_fine_print(self):
+        # The fine print is filled through class "d". A rule that hides the triangle must not reach it.
+        page = render_html(dict(ALL)["schrodinger"], legend=True, define=[r"\Psi=the wave function"])
+        self.assertIn(' class="d"/>', page)
+        hidden = re.findall(r"\.eq[0-9a-f]+ \.(\w+)\{opacity:0", page)
+        self.assertEqual(set(hidden), {"v"})
+        self.assertNotIn(' class="v"', page)
 
     def test_bad_tiers_are_rejected(self):
         for item in ("P", "=x", r"P=\frac{", r"\frac{=x"):

@@ -9,9 +9,12 @@ import sys
 import urllib.error
 import urllib.request
 
+from eqlens.constants import CONSTANTS, meaning
 from eqlens.display import detect_display, display_png, write_file
 from eqlens.engine import FONTS
+from eqlens.legend import plain
 from eqlens.render import FormulaError, render
+from eqlens.symbolfile import load as load_symbols
 
 _DEFAULT_URL = "http://127.0.0.1:8765"
 
@@ -21,7 +24,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="eqlens",
         description="Draw a mathtext formula as SVG or PNG. A terminal that can show images gets it inline.",
     )
-    parser.add_argument("tex", nargs="+", help="formula, for example e^{i\\pi}+1=0")
+    parser.add_argument("tex", nargs="*", help="formula, for example e^{i\\pi}+1=0")
     parser.add_argument("-o", "--output", help="write to this path instead of displaying. .png writes a PNG, anything else an SVG")
     parser.add_argument(
         "--format",
@@ -62,6 +65,23 @@ def main(argv: list[str] | None = None) -> int:
         help="say what a symbol means here, for example 'P=what one token can carry'; repeat for more",
     )
     parser.add_argument(
+        "--constant",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="a constant from the built-in table, such as c, k_B, or Lambda: its symbol gets the meaning and the "
+        "value. 'KEY=NAME' when the formula writes it differently. --constants lists the table",
+    )
+    parser.add_argument("--constants", action="store_true", help="list the constants the library knows, and exit")
+    parser.add_argument(
+        "--symbols",
+        action="append",
+        default=[],
+        metavar="FILE.json",
+        help="a symbols file: the meanings and tiers of one paper's symbols, used wherever a symbol appears. "
+        "--define and --tier win over it",
+    )
+    parser.add_argument(
         "--tier",
         action="append",
         default=[],
@@ -97,7 +117,14 @@ def main(argv: list[str] | None = None) -> int:
         help="a short intuitive note in fine print under the formula; repeat for more lines",
     )
     args = parser.parse_args(argv)
+    if args.constants:
+        for name, (symbol, _what, _exact, _value) in CONSTANTS.items():
+            print(f"{name:<10} {symbol:<14} {plain(meaning(name))}")
+        return 0
+    if not args.tex:
+        parser.error("give a formula")
     tex = " ".join(args.tex).strip()
+    args.shared = []
 
     mode = args.display
     if args.output:
@@ -112,11 +139,18 @@ def main(argv: list[str] | None = None) -> int:
         fmt = args.format or ("png" if name.endswith(".png") else "html" if name.endswith((".html", ".htm")) else "svg")
 
     try:
+        if args.symbols:
+            book = load_symbols(args.symbols)
+            args.shared = book["shared"]
+            args.tier = book["tier"] + args.tier
         if args.introspect:
             from eqlens.introspect import introspect
 
-            found = introspect(tex, context=args.context, define=args.define, tier=args.tier)
+            found = introspect(
+                tex, context=args.context, define=args.define, tier=args.tier, constant=args.constant, shared=args.shared
+            )
             args.define = found["define"]
+            args.constant = []
             args.tier = found["tier"]
             if not args.legend:
                 args.brief = True
@@ -129,7 +163,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.inspect:
             from eqlens.introspect import inspect
 
-            print(json.dumps(inspect(tex, args.define, args.tier), ensure_ascii=False, indent=2))
+            found = inspect(tex, args.define, args.tier, constant=args.constant, shared=args.shared)
+            print(json.dumps(found, ensure_ascii=False, indent=2))
             return 0
         data = _render(tex, fmt, args)
     except FormulaError as exc:
@@ -166,6 +201,8 @@ def _render(tex: str, fmt: str, args) -> bytes:
         "tier": args.tier,
         "credit": not args.no_credit,
         "known": args.known,
+        "constant": args.constant,
+        "shared": args.shared,
         "notes": args.note,
         "define": args.define,
         "font": args.font,
