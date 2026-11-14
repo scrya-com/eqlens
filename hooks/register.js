@@ -17,7 +17,7 @@ export function register(on) {
     await $.command.register({
       name: 'eqlens',
       description: 'Draw a formula and show it',
-      argumentHint: '[formula | --legend | --define | --note | drop]',
+      argumentHint: '[formula | --legend | --define | --tier | --note | drop]',
       immediate: true,
     })
     await $.tool.register({
@@ -32,6 +32,11 @@ export function register(on) {
             type: 'array',
             items: { type: 'string' },
             description: 'What a symbol means here, as KEY=meaning, for example "P=what one token can carry".',
+          },
+          tiers: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'What a symbol is made of, as KEY=formula, for example "P=A_eA_e^\\top". Drawn under its row.',
           },
           notes: {
             type: 'array',
@@ -146,7 +151,11 @@ function jobFromTool(event) {
   if (defines.some((item) => !/^[^=]+=.*\S/.test(item))) return { error: 'A --define needs KEY=meaning.' }
   if (defines.length > 24) return { error: 'Too many definitions.' }
   if (defines.some((item) => item.length > 500)) return { error: 'A definition is too long.' }
-  return { kind: 'draw', tex: parsed.tex, legend: input.legend === true, notes, defines }
+  const tiers = (Array.isArray(input.tiers) ? input.tiers : []).map((item) => String(item))
+  if (tiers.some((item) => !/^[^=]+=.*\S/.test(item))) return { error: 'A --tier needs KEY=formula.' }
+  if (tiers.length > 24) return { error: 'Too many tiers.' }
+  if (tiers.some((item) => item.length > 500)) return { error: 'A tier is too long.' }
+  return { kind: 'draw', tex: parsed.tex, legend: input.legend === true, notes, defines, tiers }
 }
 
 async function run($, args) {
@@ -187,6 +196,7 @@ async function draw($, job) {
     legend: !!job.legend,
     notes: job.notes || [],
     defines: job.defines || [],
+    tiers: job.tiers || [],
     width: size ? size.width : 0,
     height: size ? size.height : 0,
   }
@@ -269,7 +279,8 @@ function same(entry, job) {
     notes.length === next.length &&
     notes.every((line, i) => line === next[i]) &&
     defines.length === nextDefines.length &&
-    defines.every((item, i) => item === nextDefines[i])
+    defines.every((item, i) => item === nextDefines[i]) &&
+    JSON.stringify(Array.isArray(entry.tiers) ? entry.tiers : []) === JSON.stringify(job.tiers || [])
   )
 }
 

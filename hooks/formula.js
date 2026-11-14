@@ -1,7 +1,7 @@
 // Turn a /eqlens line into one formula, and size the pane box to the PNG.
 // Terminal cells are about twice as tall as they are wide.
 
-const FLAGS = new Set(['--legend', '--note', '--define', '--local', '--'])
+const FLAGS = new Set(['--legend', '--note', '--define', '--tier', '--local', '--'])
 
 export function parse(text) {
   const raw = String(text ?? '').trim()
@@ -13,6 +13,7 @@ export function parse(text) {
   let legend = false
   const notes = []
   const defines = []
+  const tiers = []
   const tex = []
   for (let i = 0; i < tokens.value.length; i++) {
     const token = tokens.value[i]
@@ -37,8 +38,14 @@ export function parse(text) {
       defines.push(item)
       continue
     }
+    if (token === '--tier') {
+      const item = tokens.value[++i]
+      if (item == null || !/^[^=]+=.*\S/.test(item)) return { error: 'A --tier needs KEY=formula.' }
+      tiers.push(item)
+      continue
+    }
     if (token.startsWith('--') && FLAGS.has(token) === false && !tex.length) {
-      return { error: 'The pane takes the formula, --legend, --define, and --note.' }
+      return { error: 'The pane takes the formula, --legend, --define, --tier, and --note.' }
     }
     tex.push(token)
   }
@@ -51,7 +58,9 @@ export function parse(text) {
   if (notes.some((note) => note.length > 500)) return { error: 'A note is too long.' }
   if (defines.length > 24) return { error: 'Too many definitions.' }
   if (defines.some((item) => item.length > 500)) return { error: 'A definition is too long.' }
-  return { kind: 'draw', tex: formula, legend, notes, defines }
+  if (tiers.length > 24) return { error: 'Too many tiers.' }
+  if (tiers.some((item) => item.length > 500)) return { error: 'A tier is too long.' }
+  return { kind: 'draw', tex: formula, legend, notes, defines, tiers }
 }
 
 export function drawArgv(path, job) {
@@ -59,6 +68,7 @@ export function drawArgv(path, job) {
   if (job.legend) argv.push('--legend')
   for (const note of job.notes) argv.push('--note', note)
   for (const item of job.defines || []) argv.push('--define', item)
+  for (const item of job.tiers || []) argv.push('--tier', item)
   argv.push('--', job.tex)
   return argv
 }

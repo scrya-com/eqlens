@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from eqlens.engine import FormulaError, Run, has_ink, layout, parses
 
@@ -451,6 +451,111 @@ def symbols(tex: str, *, legend: bool = True, define: Sequence[str] = (), brief:
         ]
     rows = greek + added + marks
     return rows if legend else [row for row in rows if row.defined]
+
+
+# How many tiers deep a formula may open. A tier that names itself is never opened.
+MAX_TIERS = 4
+
+
+@dataclass
+class Block:
+    """A formula and the ledger rows under it.
+
+    Each row is ``(index, tier)``: an index into the plan's shared symbol list,
+    and the block that symbol opens into, or None.
+    """
+
+    tex: str
+    rows: list[tuple[int, "Block | None"]] = field(default_factory=list)
+
+
+def plan(
+    tex: str,
+    *,
+    legend: bool = True,
+    define: Sequence[str] = (),
+    tier: Sequence[str] = (),
+    brief: bool = False,
+) -> tuple[Block, list[Symbol]]:
+    """The formula, its rows, and the tiers its symbols open into.
+
+    ``tier`` items are ``"KEY=formula"``: what the symbol ``KEY`` is made of. Its
+    row then carries ``KEY = formula`` as a formula of its own, with its own rows,
+    and a symbol in there may have a tier too. One list of symbols is shared by
+    every tier, so a symbol is the same color, and lights up, wherever it appears,
+    and it is listed once: under the first formula that has it.
+    """
+    tiers: dict[tuple, tuple[str, str]] = {}
+    for item in tier:
+        key, sep, inside = (item or "").partition("=")
+        key = key.strip().strip("$").strip()
+        inside = inside.strip().strip("$").strip()
+        if not sep or not key or not inside:
+            raise FormulaError("--tier takes KEY=formula, for example P=A_eA_e^\\top")
+        if not parses(f"${key}$"):
+            raise FormulaError(f"--tier cannot read the symbol {key}")
+        if not parses(f"${inside}$"):
+            raise FormulaError(f"--tier cannot read the formula for {key}")
+        tiers[_shape(key)] = (key, inside)
+
+    define = [item for item in define if item and item.strip()]
+    keys = [item.partition("=")[0].strip().strip("$").strip() for item in define]
+    registry: list[Symbol] = []
+    index_of: dict[tuple, int] = {}
+    spent: set[int] = set()
+
+    # Greek keeps its own colors, so a defined symbol never borrows one that is in play.
+    everything = " ".join([tex, *(inside for _key, inside in tiers.values())])
+    reserved = {found[3] for found in greek_in(everything)}
+
+    def color() -> str:
+        used = {row.color for row in registry} | reserved
+        free = [candidate for candidate in _DEFINED_COLORS if candidate not in used]
+        return free[0] if free else _DEFINED_COLORS[len(registry) % len(_DEFINED_COLORS)]
+
+    def build(text: str, path: frozenset) -> Block:
+        formula = layout(f"${text}$", 22)
+        here = [i for i, key in enumerate(keys) if key and parses(f"${key}$") and occurrences(formula, key)]
+        spent.update(here)
+        items = [define[i] for i in here]
+        rows = symbols(text, legend=legend, define=items, brief=brief)
+        opens = [
+            shape
+            for shape, (key, _inside) in tiers.items()
+            if shape not in path and len(path) < MAX_TIERS and occurrences(formula, key)
+        ]
+        for shape in opens:
+            # A symbol with a tier gets a row and a color even when nothing else is said of it.
+            if not any(_shape(row.key) == shape for row in rows):
+                known = symbols(text, legend=True, define=items)
+                row = next((row for row in known if _shape(row.key) == shape), None)
+                rows.append(row or Symbol(tiers[shape][0], "", "", None))
+        block = Block(text)
+        for row in rows:
+            shape = _shape(row.key)
+            if shape in index_of:
+                continue
+            if shape in opens:
+                row.defined = True
+            if row.defined and row.key[1:] not in _BY_COMMAND:
+                row.color = color()
+            index_of[shape] = len(registry)
+            registry.append(row)
+            inside = build(f"{row.key}={tiers[shape][1]}", path | {shape}) if shape in opens else None
+            block.rows.append((index_of[shape], inside))
+        return block
+
+    top = build(tex, frozenset())
+    # A definition for a symbol that is nowhere still gets its row, as it always did.
+    left = [define[i] for i in range(len(define)) if i not in spent]
+    for row in symbols(tex, legend=False, define=left) if left else []:
+        if _shape(row.key) not in index_of:
+            if row.key[1:] not in _BY_COMMAND:
+                row.color = color()
+            index_of[_shape(row.key)] = len(registry)
+            registry.append(row)
+            top.rows.append((len(registry) - 1, None))
+    return top, registry
 
 
 def occurrences(formula: Run, key: str, font: str = "sans") -> list[frozenset[int]]:

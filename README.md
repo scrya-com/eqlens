@@ -80,6 +80,23 @@ eqlens --legend \
   <img src="docs/note.png" alt="A Gaussian with sigma, pi, and mu colored, a ledger, and two short notes under it" width="640">
 </p>
 
+## Open a symbol up
+
+`--tier` says what a symbol is made of. Its formula is drawn under its row, and a symbol in there can open again.
+
+```bash
+eqlens --brief \
+  --define 'P=keeps the coarse part' \
+  --tier 'P=A_eA_e^\top' --tier 'A_e=VU^\top' \
+  -o recover.html 'v=P\,u_a+\frac{(I-P)\,(x_t+u_a)}{\sigma}'
+```
+
+<p align="center">
+  <img src="docs/tier.png" alt="A formula whose P opens into P equals A sub e times A sub e transpose, and whose A sub e opens again into V U transpose" width="640">
+</p>
+
+An `.html` output is a fragment for a web page with two buttons: **Expand** opens the tiers, and **Copy** puts the TeX on the clipboard.
+
 ## Or let Claude say it
 
 `--introspect` asks Claude what the parts of the formula stand for and draws them for you. It needs `pip install 'eqlens[ai]'` and an `ANTHROPIC_API_KEY`.

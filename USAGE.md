@@ -48,6 +48,39 @@ eqlens --legend \
   <img src="docs/define.png" alt="A formula whose P, A sub e, and u star are colored, with a ledger giving the meaning of each" width="640">
 </p>
 
+## Tiers: what a symbol is made of
+
+`--tier 'KEY=formula'` says what a symbol is made of. The formula `KEY = formula` is drawn under that symbol's row, set in, with its own rows. A symbol in there can have a tier too, four deep at most.
+
+```bash
+eqlens --brief \
+  --define 'P=keeps the coarse part' \
+  --tier 'P=A_eA_e^\top' \
+  --tier 'A_e=VU^\top' \
+  'v=P\,u_a+\frac{(I-P)\,(x_t+u_a)}{\sigma}'
+```
+
+A symbol is one thing in every tier: the same color, listed once under the first formula that has it, and lit up everywhere when you point at it. A `--define` reaches a symbol inside a tier. A tier that names itself opens once and stops.
+
+`eqlens --inspect` with the same `--tier` flags prints the whole tree as JSON, so you can see what the next level holds before you write it.
+
+## Buttons: Expand and Copy
+
+Name the output `.html`, or pass `--format html`, to get a fragment for a web page: the SVG under a small bar with two buttons.
+
+- **Copy** puts the formula's TeX on the clipboard.
+- **Expand** is there when the formula has tiers. The drawing starts with them shut and Expand opens them; Collapse shuts them again.
+
+```bash
+eqlens --brief --tier 'P=A_eA_e^\top' -o recover.html 'v=P\,u_a+\frac{(I-P)\,(x_t+u_a)}{\sigma}'
+```
+
+The fragment carries its own style and one short script. The SVG and PNG have no script in them. In an SVG or PNG the tiers are always open.
+
+## The mark in the corner
+
+An SVG card has a small mark in its bottom right corner that links to [scrya.com/eqlens](https://scrya.com/eqlens). It is inside the SVG as data, so a drawing fetches nothing. `--no-credit` leaves it off. A bare formula with no card, and a PNG, have none.
+
 ## Let Claude say what the parts mean
 
 `--introspect` asks Claude what the symbols and sub-expressions stand for in this formula, and draws them as if you had written the `--define` lines yourself. It also adds one line saying what the formula is.
@@ -58,9 +91,9 @@ export ANTHROPIC_API_KEY=...
 eqlens --introspect -o einstein.svg 'G_{\mu\nu}+\Lambda g_{\mu\nu}=\frac{8\pi G}{c^4}T_{\mu\nu}'
 ```
 
-Claude picks the parts worth explaining, such as `G_{\mu\nu}` as a whole and not μ and ν apart. Every part it names is checked against the typeset formula, and one that is not there is dropped. A `--define` of your own wins over Claude's for the same symbol. `--context 'from a paper on video diffusion'` tells it where the formula comes from.
+Where a part is defined by a formula of its own, Claude gives that as a tier. Claude picks the parts worth explaining, such as `G_{\mu\nu}` as a whole and not μ and ν apart. Every part it names is checked against the typeset formula, and one that is not there is dropped. A `--define` of your own wins over Claude's for the same symbol. `--context 'from a paper on video diffusion'` tells it where the formula comes from.
 
-Each call is one request to the Claude API, on your account. To ask once and keep the answer, add `--inspect`: it prints the meanings as JSON and draws nothing. Paste the `define` items into your own `--define` flags or build script, and later runs need no key.
+Each call is one request to the Claude API, on your account. To ask once and keep the answer, add `--inspect`: it prints the meanings as JSON and draws nothing. Paste the `define` and `tier` items into your own `--define` and `--tier` flags or build script, and later runs need no key.
 
 ```bash
 eqlens --introspect --inspect 'i\hbar\frac{\partial}{\partial t}\Psi=\hat{H}\Psi'
@@ -78,10 +111,12 @@ Inline means the `<svg>` element itself is in the HTML. Inside `<img>` the same 
 
 ```astro
 ---
-import eq from '../eq/target.svg?raw'
+import eq from '../eq/target.html?raw'
 ---
-<figure set:html={eq} />
+<Fragment set:html={eq} />
 ```
+
+That is the `.html` fragment, with its buttons. A bare `.svg` goes in the same way inside a `<figure>`.
 
 An inline SVG takes its colors from the page when the page sets them:
 
@@ -100,27 +135,29 @@ Each SVG scopes its own ids and styles, so many can share a page.
 | `--legend` | Color Greek, and name Greek, accents, subscripts, and superscripts |
 | `--brief` | `--legend` without plain subscripts and powers: only the rows with something to say |
 | `--tips` | SVG only: also pop up a browser tooltip with the name and meaning. Off by default, since the row that lights up says the same |
+| `--tier 'KEY=formula'` | What a symbol is made of, drawn under its row. Repeat for more, and for deeper levels |
+| `--no-credit` | Leave the small eqlens mark off an SVG card |
 | `--introspect` | Ask Claude what the parts mean and draw them. Needs `eqlens[ai]` and an API key |
 | `--context 'text'` | With `--introspect`: where the formula comes from |
 | `--inspect` | Print what is in the formula as JSON and draw nothing |
 | `--define 'KEY=meaning'` | Say what a symbol means here. Repeat for more |
 | `--note 'text'` | A short note in fine print under the formula. Repeat for more lines. `$...$` renders as math |
-| `-o file` | Write a file, print its absolute path, and do not display it. `.png` writes a PNG, anything else an SVG |
-| `--format svg\|png` | Choose the format whatever the file is called |
+| `-o file` | Write a file, print its absolute path, and do not display it. `.png` writes a PNG, `.html` a fragment with buttons, anything else an SVG |
+| `--format svg\|png\|html` | Choose the format whatever the file is called. `html` adds the Copy and Expand buttons |
 | `--font sans\|serif\|stix\|cm` | Typeface. `stix` and `cm` look like a printed paper |
 | `--local` | Render in this process |
 | `--bg '#12141a'` | Background. A bare formula is transparent by default; a card is dark |
 | `--color '#f2f2f7'` | Color of everything that has no color of its own |
 | `--dpi 220` | PNG resolution |
 
-`eqlensd` is optional. It serves `/svg` and `/png` on `http://127.0.0.1:8765`. When it is running, `eqlens` uses it.
+`eqlensd` is optional. It serves `/svg`, `/png`, and `/html` on `http://127.0.0.1:8765`. When it is running, `eqlens` uses it.
 
 One formula per call. matplotlib mathtext: fractions, roots, integrals, sums, subscripts, superscripts, accents, `\mathrm`, `\mathbb`, `\mathcal`, `\text`, and Greek commands. No `\begin{...}` environments, no preamble, no `\color`, no TikZ. [`tests/equations.py`](tests/equations.py) lists some fifty formulas from physics, quantum physics, and machine learning that are drawn in the tests.
 
 ## From Python
 
 ```python
-from eqlens.render import render_svg, render_png
+from eqlens.render import render_svg, render_png, render_html
 
 svg = render_svg(r"e^{i\pi}+1=0", legend=True, define=["e=Euler's number"])
 png = render_png(r"e^{i\pi}+1=0", legend=True, dpi=220)
@@ -129,7 +166,8 @@ from eqlens.introspect import inspect, introspect
 
 parts = inspect(r"u^\star=P\,\epsilon-x_0")       # no key needed
 found = introspect(r"u^\star=P\,\epsilon-x_0")    # asks Claude
-svg = render_svg(found["tex"], brief=True, define=found["define"], notes=[found["about"]])
+svg = render_svg(found["tex"], brief=True, define=found["define"], tier=found["tier"], notes=[found["about"]])
+page = render_html(found["tex"], brief=True, define=found["define"], tier=found["tier"])
 ```
 
 ## Claude Code

@@ -44,7 +44,7 @@ One formula per call. `$...$` wrappers are optional.
 
 SVG is the default for a file and for a pipe. `-o name.png` or `--format png` gives a PNG. Both are the same picture.
 
-For a web page, write the SVG and put it inline in the HTML, not in `<img>`. Inline, pointing at a symbol lights every place it appears and its ledger row. There is no tooltip unless you pass `--tips`; leave it off, the row already says it. Inside `<img>` the same file is a still picture. The page can restyle an inline SVG with the CSS variables `--eq-fg`, `--eq-bg`, `--eq-dim`, and `--eq-mark`.
+For a web page, write the SVG (or the `.html` fragment, which adds Copy and Expand buttons) and put it inline in the HTML, not in `<img>`. Inline, pointing at a symbol lights every place it appears and its ledger row. There is no tooltip unless you pass `--tips`; leave it off, the row already says it. Inside `<img>` the same file is a still picture. An SVG card carries a small eqlens mark in its corner that links to scrya.com/eqlens; leave it on unless the user asks for `--no-credit`. The page can restyle an inline SVG with the CSS variables `--eq-fg`, `--eq-bg`, `--eq-dim`, and `--eq-mark`.
 
 ## Legend
 
@@ -78,6 +78,24 @@ eqlens --legend \
 
 Prefer `--define` to a `--note` when the sentence is about one symbol.
 
+## Tiers
+
+`--tier 'KEY=formula'` says what a symbol is made of. `KEY = formula` is drawn under that symbol's row, with its own rows, and a symbol in there can have a tier too (four deep at most).
+
+```bash
+eqlens --brief \
+  --define 'P=keeps the coarse part' \
+  --tier 'P=A_eA_e^\top' \
+  --tier 'A_e=VU^\top' \
+  'v=P\,u_a+\frac{(I-P)\,(x_t+u_a)}{\sigma}'
+```
+
+Add a tier when a symbol stands for a formula the reader would want to see: one the user's files state, or the standard definition. Do not invent one, and do not restate the formula you started from. One or two tiers per formula is usually right; a tree that is taller than it is useful helps nobody. Give `formula` as the right-hand side only: `P=A_eA_e^\top`, not `P=P=A_eA_e^\top`.
+
+A `--define` reaches a symbol inside a tier, so define the new symbols a tier brings in. In the pane tool, tiers go in `tiers`.
+
+For a web page write `-o name.html`. That is a fragment with a Copy button and, when there are tiers, an Expand button: the tiers start shut. In an SVG or PNG they are always open.
+
 ## Look inside
 
 You are the model, so do the looking yourself. Do not run `--introspect`: it calls the Claude API on the user's key to do what you can do here for nothing.
@@ -85,10 +103,11 @@ You are the model, so do the looking yourself. Do not run `--introspect`: it cal
 1. Run `eqlens --inspect '<tex>'`. It prints JSON and draws nothing: each symbol and sub-expression, how it is said, and how often it appears. No key, no network.
 2. Decide what the formula is and which three to six parts a reader must know. Prefer a whole sub-expression to its pieces: explain `G_{\mu\nu}`, not `\mu` and `\nu`.
 3. Draw it with one `--define` per part, copying each `key` from the JSON, and `--brief`. Add one `--note` with the idea of the whole formula.
+4. To go a level down, add a `--tier` for a part and run `--inspect` again with the same flags. The JSON is now a tree: that part carries `"tier"`, with the new formula and the symbols it brings in. Define those, and repeat while a level still earns its place.
 
 Use what the user and their files say the symbols mean before the textbook meaning. If you cannot tell what a part means, leave it out.
 
-`--introspect` is for a person at a shell with no model to hand. It needs `pip install 'eqlens[ai]'` and `ANTHROPIC_API_KEY`. `--introspect --inspect` prints the meanings as JSON to keep.
+`--introspect` is for a person at a shell with no model to hand. It needs `pip install 'eqlens[ai]'` and `ANTHROPIC_API_KEY`. `--introspect --inspect` prints the meanings and tiers as JSON to keep.
 
 ## Notes
 

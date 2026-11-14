@@ -19,7 +19,11 @@ from urllib.parse import parse_qs, urlparse
 from eqlens.render import FormulaError, render
 
 _MAX_BODY = 64 * 1024
-_TYPES = {"/svg": ("svg", "image/svg+xml"), "/png": ("png", "image/png")}
+_TYPES = {
+    "/svg": ("svg", "image/svg+xml"),
+    "/png": ("png", "image/png"),
+    "/html": ("html", "text/html; charset=utf-8"),
+}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -60,6 +64,7 @@ class Handler(BaseHTTPRequestHandler):
                 "brief": query.get("brief", [""])[0].lower() in ("1", "true", "yes"),
                 "notes": query.get("note", []),
                 "define": query.get("define", []),
+                "tier": query.get("tier", []),
                 "font": query.get("font", [None])[0],
             },
         )
@@ -88,7 +93,7 @@ class Handler(BaseHTTPRequestHandler):
         fmt, content_type = _TYPES[path]
         dpi, color, bg = fields.get("dpi"), fields.get("color"), fields.get("bg")
         kwargs = {}
-        for name in ("notes", "define"):
+        for name in ("notes", "define", "tier"):
             value = fields.get(name) or []
             if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
                 self._json(400, {"error": f"{name} must be a list of strings"})
@@ -97,6 +102,7 @@ class Handler(BaseHTTPRequestHandler):
         kwargs["legend"] = fields.get("legend") is True
         kwargs["brief"] = fields.get("brief") is True
         kwargs["tips"] = fields.get("tips") is True
+        kwargs["credit"] = fields.get("credit") is not False
         if fields.get("font"):
             kwargs["font"] = str(fields["font"])
         if dpi is not None:

@@ -23,7 +23,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("tex", nargs="+", help="formula, for example e^{i\\pi}+1=0")
     parser.add_argument("-o", "--output", help="write to this path instead of displaying. .png writes a PNG, anything else an SVG")
-    parser.add_argument("--format", choices=["svg", "png"], help="svg (default) or png. Overrides the -o extension")
+    parser.add_argument(
+        "--format",
+        choices=["svg", "png", "html"],
+        help="svg (default), png, or html: the SVG in a fragment with Copy and Expand buttons. Overrides the -o extension",
+    )
     parser.add_argument(
         "--url",
         default=os.environ.get("EQLENS_URL") or os.environ.get("MATHCAT_URL") or _DEFAULT_URL,
@@ -58,6 +62,15 @@ def main(argv: list[str] | None = None) -> int:
         help="say what a symbol means here, for example 'P=what one token can carry'; repeat for more",
     )
     parser.add_argument(
+        "--tier",
+        action="append",
+        default=[],
+        metavar="KEY=FORMULA",
+        help="what a symbol is made of, drawn under its row as a formula of its own, for example "
+        "'P=A_eA_e^\\top'; repeat for more. A symbol inside a tier can have a tier too",
+    )
+    parser.add_argument("--no-credit", action="store_true", help="leave the small eqlens mark off an SVG card")
+    parser.add_argument(
         "--introspect",
         action="store_true",
         help="ask Claude what the parts of the formula mean and draw them as --define items. "
@@ -88,14 +101,16 @@ def main(argv: list[str] | None = None) -> int:
     if mode in ("iterm", "kitty"):
         fmt = "png"
     else:
-        fmt = args.format or ("png" if (args.output or "").lower().endswith(".png") else "svg")
+        name = (args.output or "").lower()
+        fmt = args.format or ("png" if name.endswith(".png") else "html" if name.endswith((".html", ".htm")) else "svg")
 
     try:
         if args.introspect:
             from eqlens.introspect import introspect
 
-            found = introspect(tex, context=args.context, define=args.define)
+            found = introspect(tex, context=args.context, define=args.define, tier=args.tier)
             args.define = found["define"]
+            args.tier = found["tier"]
             if not args.legend:
                 args.brief = True
             headline = ": ".join(part for part in (found["name"], found["about"]) if part)
@@ -107,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.inspect:
             from eqlens.introspect import inspect
 
-            print(json.dumps(inspect(tex, args.define), ensure_ascii=False, indent=2))
+            print(json.dumps(inspect(tex, args.define, args.tier), ensure_ascii=False, indent=2))
             return 0
         data = _render(tex, fmt, args)
     except FormulaError as exc:
@@ -141,6 +156,8 @@ def _render(tex: str, fmt: str, args) -> bytes:
         "legend": args.legend,
         "brief": args.brief,
         "tips": args.tips,
+        "tier": args.tier,
+        "credit": not args.no_credit,
         "notes": args.note,
         "define": args.define,
         "font": args.font,

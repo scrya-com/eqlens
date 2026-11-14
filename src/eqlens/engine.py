@@ -180,7 +180,16 @@ def box(mark: Mark, pad: float = 1.0) -> tuple[float, float, float, float]:
     return (mark.x + left - pad, mark.y - top - pad, right - left + 2 * pad, top - bottom + 2 * pad)
 
 
-def to_svg(scene: Scene, *, uid: str, label: str, fg: str, bg: str | None, tips: bool = False) -> str:
+def to_svg(
+    scene: Scene,
+    *,
+    uid: str,
+    label: str,
+    fg: str,
+    bg: str | None,
+    tips: bool = False,
+    credit: tuple[float, float, float, str, str] | None = None,
+) -> str:
     """One self-contained SVG. ``uid`` scopes its ids and CSS so many can share a page.
 
     Colors fall back to the ones given here. A page that inlines the SVG can set
@@ -188,6 +197,7 @@ def to_svg(scene: Scene, *, uid: str, label: str, fg: str, bg: str | None, tips:
     Hover needs the SVG inline or opened on its own. Inside ``<img>`` it is a still.
     ``tips`` adds a browser tooltip to each symbol. It is off by default: the
     ledger row that lights up already says the same thing, and a tooltip covers it.
+    ``credit`` is ``(x, y, size, url, png_base64)``: a small picture that links out.
     """
     ids: dict[tuple[str, int, int], str] = {}
     body: list[str] = []
@@ -228,6 +238,14 @@ def to_svg(scene: Scene, *, uid: str, label: str, fg: str, bg: str | None, tips:
             f".{uid}:has(.h:hover) :is(.f,.r){{opacity:.28}}",
             f"{lit}{{opacity:1}}",
         ]
+    if credit:
+        x, y, size, url, picture = credit
+        css += [f".{uid} .cr{{opacity:.45;transition:opacity .12s}}", f".{uid} .cr:hover{{opacity:1}}"]
+        body.append(
+            f'<a class="cr" href={quoteattr(url)} xlink:href={quoteattr(url)} target="_blank" rel="noopener" '
+            f'aria-label="Drawn with eqlens"><image x="{_n(x)}" y="{_n(y)}" width="{_n(size)}" height="{_n(size)}" '
+            f'href="data:image/png;base64,{picture}" xlink:href="data:image/png;base64,{picture}"/></a>'
+        )
     defs = "".join(f'<path id="{name}" d="{_d(*outline(*key))}"/>' for key, name in ids.items())
     width, height = _n(scene.width), _n(scene.height)
     backdrop = f'<rect class="bg" width="{width}" height="{height}"/>' if bg else ""

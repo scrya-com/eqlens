@@ -18,7 +18,7 @@ import os
 from collections.abc import Sequence
 
 from eqlens.engine import FormulaError, layout, parses
-from eqlens.legend import _shape, occurrences, plain, symbols
+from eqlens.legend import Block, Symbol, _shape, occurrences, plain, plan
 from eqlens.render import normalize_tex
 
 MODEL = "claude-opus-5-5"
@@ -38,6 +38,11 @@ operators, and parts whose meaning is only their name.
 For each part give:
 - key: its TeX exactly as written in the formula, with no $ signs. Where the \
 ledger lists the part, copy the ledger's key.
+- inside: when the part is itself defined by a formula that a reader would \
+want opened, the right-hand side of that formula as TeX, such as \
+A_eA_e^\\top for P. Give it only when the reader's context states it or it is \
+the standard definition. Otherwise an empty string. Never restate the formula \
+you were given.
 - meaning: what it does or stands for here, in plain words. At most 60 \
 characters, lower case except proper names, no full stop. Say what it is for, \
 not what it is called: "how spacetime curves", not "the Einstein tensor". No \
@@ -62,8 +67,8 @@ _SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object",
-                "properties": {"key": {"type": "string"}, "meaning": {"type": "string"}},
-                "required": ["key", "meaning"],
+                "properties": {"key": {"type": "string"}, "meaning": {"type": "string"}, "inside": {"type": "string"}},
+                "required": ["key", "meaning", "inside"],
                 "additionalProperties": False,
             },
         },
@@ -77,60 +82,97 @@ class IntrospectError(FormulaError):
     """Claude could not be asked, or did not answer."""
 
 
-def inspect(tex: str, define: Sequence[str] = ()) -> dict:
-    """What is in ``tex``: each ledger row, how it is said, what it means, and how often it appears."""
-    text = normalize_tex(tex)[1:-1].strip()
-    formula = layout(f"${text}$", 22)
-    rows = []
-    for row in symbols(text, define=define):
-        rows.append(
-            {
-                "key": row.key,
-                "says": plain(row.name) if row.name else "",
-                "means": plain(row.hint),
-                "defined": row.defined,
-                "appears": len(occurrences(formula, row.key)),
-            }
-        )
-    return {"tex": text, "symbols": rows}
+def inspect(tex: str, define: Sequence[str] = (), tier: Sequence[str] = ()) -> dict:
+    """What is in ``tex``: each ledger row, how it is said, what it means, and how often it appears.
 
-
-def introspect(tex: str, *, context: str = "", define: Sequence[str] = (), model: str | None = None, client=None) -> dict:
-    """Ask Claude what the parts of ``tex`` mean.
-
-    Returns ``{"tex", "name", "about", "define"}``. ``define`` holds the caller's
-    own items first, then Claude's for the parts the caller did not define, as
-    ``"KEY=meaning"`` strings. ``context`` is a sentence or two about where the
-    formula comes from. ``client`` is an ``anthropic.Anthropic``; one is made
-    when it is left out.
+    A symbol that opens into a tier carries ``"tier"``: that formula and its own rows, in the same form.
     """
-    found = inspect(tex, define)
+    text = normalize_tex(tex)[1:-1].strip()
+    top, rows = plan(text, define=define, tier=tier)
+    return _describe(top, rows)
+
+
+def _describe(block: Block, rows: list[Symbol]) -> dict:
+    formula = layout(f"${block.tex}$", 22)
+    listed = []
+    for index, inside in block.rows:
+        row = rows[index]
+        entry = {
+            "key": row.key,
+            "says": plain(row.name) if row.name else "",
+            "means": plain(row.hint),
+            "defined": bool(row.hint) and row.defined,
+            "appears": len(occurrences(formula, row.key)),
+        }
+        if inside:
+            entry["tier"] = _describe(inside, rows)
+        listed.append(entry)
+    return {"tex": block.tex, "symbols": listed}
+
+
+def _keys(found: dict) -> list[dict]:
+    """Every row in an ``inspect`` result, tiers included."""
+    flat = []
+    for row in found["symbols"]:
+        flat.append(row)
+        if "tier" in row:
+            flat += _keys(row["tier"])
+    return flat
+
+
+def introspect(
+    tex: str,
+    *,
+    context: str = "",
+    define: Sequence[str] = (),
+    tier: Sequence[str] = (),
+    model: str | None = None,
+    client=None,
+) -> dict:
+    """Ask Claude what the parts of ``tex`` mean, and which of them open into a formula.
+
+    Returns ``{"tex", "name", "about", "define", "tier"}``. ``define`` and ``tier``
+    hold the caller's own items first, then Claude's for the parts the caller
+    left alone, as ``"KEY=meaning"`` and ``"KEY=formula"`` strings. ``context`` is
+    a sentence or two about where the formula comes from. ``client`` is an
+    ``anthropic.Anthropic``; one is made when it is left out.
+    """
+    found = inspect(tex, define, tier)
     text = found["tex"]
     formula = layout(f"${text}$", 22)
-    answer = _ask(text, found["symbols"], context, model or os.environ.get("EQLENS_MODEL") or MODEL, client)
+    answer = _ask(text, _keys(found), context, model or os.environ.get("EQLENS_MODEL") or MODEL, client)
+
+    def key_of(item: str) -> str:
+        return item.partition("=")[0].strip().strip("$").strip()
 
     own = [item for item in define if item and item.strip()]
-    taken = {_shape(item.partition("=")[0].strip().strip("$").strip()) for item in own}
+    own_tiers = [item for item in tier if item and item.strip()]
+    taken = {_shape(key_of(item)) for item in own}
+    opened = {_shape(key_of(item)) for item in own_tiers}
     added: list[str] = []
+    tiers: list[str] = []
     for part in answer.get("symbols") or []:
         key = str(part.get("key", "")).strip().strip("$").strip()
         meaning = " ".join(str(part.get("meaning", "")).split()).rstrip(".")
-        if not key or not meaning or "=" in key or not parses(f"${key}$"):
-            continue
-        if not occurrences(formula, key):
+        inside = str(part.get("inside", "") or "").strip().strip("$").strip()
+        if not key or "=" in key or not parses(f"${key}$") or not occurrences(formula, key):
             continue
         shape = _shape(key)
-        if shape in taken:
-            continue
-        taken.add(shape)
-        if not parses(meaning):
-            meaning = meaning.replace("$", r"\$")
-        added.append(f"{key}={meaning}")
+        if meaning and shape not in taken:
+            taken.add(shape)
+            if not parses(meaning):
+                meaning = meaning.replace("$", r"\$")
+            added.append(f"{key}={meaning}")
+        # A tier that only repeats the formula it came from opens nothing.
+        if inside and shape not in opened and parses(f"${inside}$") and _shape(f"{key}={inside}") != _shape(text):
+            opened.add(shape)
+            tiers.append(f"{key}={inside}")
     return {
         "tex": text,
         "name": " ".join(str(answer.get("name", "")).split()),
         "about": " ".join(str(answer.get("about", "")).split()),
         "define": own + added,
+        "tier": own_tiers + tiers,
     }
 
 

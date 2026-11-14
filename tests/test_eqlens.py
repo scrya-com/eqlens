@@ -18,8 +18,8 @@ from eqlens.cli import main
 from eqlens.display import display_png
 from eqlens.engine import layout
 from eqlens.introspect import IntrospectError, inspect, introspect
-from eqlens.legend import greek_in, hints_in, notation_in, occurrences, plain, symbols
-from eqlens.render import FormulaError, render_png, render_svg
+from eqlens.legend import MAX_TIERS, greek_in, hints_in, notation_in, occurrences, plain, plan, symbols
+from eqlens.render import FormulaError, render_html, render_png, render_svg
 from eqlens.server import Handler
 
 
@@ -282,7 +282,7 @@ class SvgTests(unittest.TestCase):
         self.assertNotEqual(first, second)
 
     def test_png_and_svg_are_the_same_shape(self):
-        root = ElementTree.fromstring(render_svg(self.TEX, legend=True))
+        root = ElementTree.fromstring(render_svg(self.TEX, legend=True, credit=False))
         _x, _y, width, height = (float(part) for part in root.get("viewBox").split())
         pixels = _size(render_png(self.TEX, legend=True, dpi=144))
         self.assertAlmostEqual(pixels[0] / pixels[1], width / height, places=1)
@@ -365,6 +365,140 @@ class EquationTests(unittest.TestCase):
         self.assertEqual([item[2] for item in notation_in(r"2^T")], ["$2$ to the $T$"])
 
 
+class TierTests(unittest.TestCase):
+    TEX = r"v=P\,u_a+\frac{(I-P)\,(x_t+u_a)}{\sigma}"
+    TIERS = [r"P=A_eA_e^\top", r"A_e=VU^\top"]
+
+    def test_a_symbol_opens_into_its_formula_and_that_one_opens_again(self):
+        top, rows = plan(self.TEX, legend=False, define=["P=keeps the coarse part"], tier=self.TIERS)
+        self.assertEqual([rows[index].key for index, _tier in top.rows], ["P"])
+        inside = top.rows[0][1]
+        self.assertEqual(inside.tex, r"P=A_eA_e^\top")
+        self.assertEqual([rows[index].key for index, _tier in inside.rows], ["A_{e}"])
+        deeper = inside.rows[0][1]
+        self.assertEqual(deeper.tex, r"A_{e}=VU^\top")
+        self.assertEqual(deeper.rows, [])
+
+    def test_a_tier_alone_gives_its_symbol_a_row_and_a_color(self):
+        top, rows = plan("y=Wx", legend=False, tier=["W=W_0+BA"])
+        self.assertEqual([(rows[index].key, rows[index].hint) for index, _tier in top.rows], [("W", "")])
+        self.assertTrue(rows[0].color)
+        self.assertEqual(top.rows[0][1].tex, "W=W_0+BA")
+
+    def test_a_tier_that_names_itself_opens_once(self):
+        top, rows = plan("x=1", legend=False, tier=["x=x+1"])
+        inside = top.rows[0][1]
+        self.assertEqual(inside.tex, "x=x+1")
+        self.assertEqual(inside.rows, [])
+
+    def test_tiers_stop_at_the_depth_limit(self):
+        chain = [f"a_{{{i}}}=a_{{{i + 1}}}+1" for i in range(MAX_TIERS + 3)]
+        block, _rows = plan("y=a_{0}", legend=False, tier=chain)
+        depth = 0
+        while block.rows and block.rows[0][1]:
+            block = block.rows[0][1]
+            depth += 1
+        self.assertEqual(depth, MAX_TIERS)
+
+    def test_a_symbol_is_listed_once_and_lights_up_in_every_tier(self):
+        svg = render_svg(self.TEX, define=["P=keeps the coarse part"], tier=self.TIERS, credit=False)
+        root = ElementTree.fromstring(svg)
+        groups = [g.get("class").split() for g in root.iter("{http://www.w3.org/2000/svg}g")]
+        # P: twice in the top formula, once in its own tier, and one row.
+        self.assertEqual(sorted(g[0] for g in groups if "s0" in g), ["f", "f", "f", "r"])
+        # A_e: two glyphs in each of two places in P's tier, two more heading its own, and one row.
+        self.assertEqual(sum("s1" in g and g[0] == "r" for g in groups), 1)
+        self.assertEqual(sum("s1" in g and g[0] == "f" for g in groups), 6)
+
+    def test_tiers_make_the_card_taller_and_are_in_the_png_too(self):
+        plain_card = _size(render_png(self.TEX, define=["P=keeps the coarse part"]))
+        tiered = _size(render_png(self.TEX, define=["P=keeps the coarse part"], tier=self.TIERS))
+        self.assertGreater(tiered[1], plain_card[1])
+
+    def test_a_definition_reaches_a_symbol_inside_a_tier(self):
+        _top, rows = plan(self.TEX, legend=False, define=["A_e=squeezes a cell into one token"], tier=self.TIERS)
+        self.assertEqual({row.key: row.hint for row in rows}["A_{e}"], "squeezes a cell into one token")
+
+    def test_bad_tiers_are_rejected(self):
+        for item in ("P", "=x", r"P=\frac{", r"\frac{=x"):
+            with self.assertRaises(FormulaError):
+                render_svg(self.TEX, tier=[item])
+
+    def test_inspect_shows_the_tiers_as_a_tree(self):
+        found = inspect(self.TEX, tier=self.TIERS)
+        row = next(row for row in found["symbols"] if row["key"] == "P")
+        self.assertEqual(row["tier"]["tex"], r"P=A_eA_e^\top")
+        deeper = next(r for r in row["tier"]["symbols"] if r["key"] == "A_{e}")
+        self.assertEqual(deeper["tier"]["tex"], r"A_{e}=VU^\top")
+        self.assertEqual(deeper["appears"], 2)
+
+    def test_the_command_line_takes_tiers(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(main(["--inspect", "--tier", r"P=A_eA_e^\top", self.TEX]), 0)
+        found = json.loads(out.getvalue())
+        self.assertIn("tier", next(row for row in found["symbols"] if row["key"] == "P"))
+
+
+class CreditTests(unittest.TestCase):
+    def test_a_card_links_back_and_a_bare_formula_does_not(self):
+        card = render_svg(r"e^{i\pi}+1=0", legend=True)
+        root = ElementTree.fromstring(card)
+        links = list(root.iter("{http://www.w3.org/2000/svg}a"))
+        self.assertEqual([link.get("href") for link in links], ["https://scrya.com/eqlens"])
+        self.assertEqual(links[0].get("target"), "_blank")
+        image = links[0].find("{http://www.w3.org/2000/svg}image")
+        self.assertEqual(float(image.get("width")) * 4 / 3, 30.0)
+        self.assertTrue(image.get("href").startswith("data:image/png;base64,"))
+        self.assertNotIn("<a ", render_svg("a+b"))
+
+    def test_the_mark_fetches_nothing_and_can_be_left_off(self):
+        card = render_svg(r"e^{i\pi}+1=0", legend=True)
+        elsewhere = re.sub(r"http://www\.w3\.org/\S*|https://scrya\.com/eqlens", "", card)
+        self.assertNotIn("http", elsewhere)
+        self.assertNotIn("<image", render_svg(r"e^{i\pi}+1=0", legend=True, credit=False))
+        self.assertEqual(render_png(r"e^{i\pi}+1=0", legend=True), render_png(r"e^{i\pi}+1=0", legend=True, credit=False))
+
+    def test_the_mark_sits_clear_of_the_last_line(self):
+        with_mark = ElementTree.fromstring(render_svg(r"e^{i\pi}+1=0", legend=True))
+        without = ElementTree.fromstring(render_svg(r"e^{i\pi}+1=0", legend=True, credit=False))
+        height = lambda root: float(root.get("viewBox").split()[3])
+        self.assertGreater(height(with_mark), height(without))
+
+
+class HtmlTests(unittest.TestCase):
+    TEX = TierTests.TEX
+
+    def test_a_fragment_has_a_copy_button_and_the_tex_to_copy(self):
+        page = render_html(r"a<b & c", legend=True)
+        self.assertIn('data-tex="a&lt;b &amp; c"', page)
+        self.assertEqual(page.count('class="eqlens-copy"'), 1)
+        self.assertNotIn('class="eqlens-expand"', page)
+        self.assertEqual(page.count("<svg "), 1)
+
+    def test_tiers_add_an_expand_button_and_a_second_drawing(self):
+        page = render_html(self.TEX, define=["P=keeps the coarse part"], tier=TierTests.TIERS)
+        self.assertEqual(page.count('class="eqlens-expand"'), 1)
+        self.assertEqual(page.count("<svg "), 2)
+        shut, wide = page.split('<div class="eqlens-open" hidden>')
+        self.assertNotIn(r"VU", shut.split("data-tex")[0])
+        height = lambda text: float(re.search(r'viewBox="0 0 [\d.]+ ([\d.]+)"', text).group(1))
+        self.assertGreater(height(wide), height(shut))
+        ids = re.findall(r'<svg [^>]*class="(eq[0-9a-f]+)"', page)
+        self.assertEqual(len(set(ids)), 2)
+
+    def test_the_file_name_picks_html(self):
+        path = os.path.join(self.id().replace(".", "_") + ".html")
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["--local", "--legend", "-o", path, r"E=mc^2"]), 0)
+            with open(path, encoding="utf-8") as handle:
+                self.assertTrue(handle.read().startswith('<figure class="eqlens"'))
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+
 class _Block:
     type = "text"
 
@@ -432,6 +566,24 @@ class IntrospectTests(unittest.TestCase):
         )
         svg = render_svg(self.TEX, brief=True, define=found["define"])
         self.assertGreaterEqual(svg.count("s0"), 2)
+
+    def test_claude_can_open_a_part_into_its_formula(self):
+        tex = r"\gamma m c^2"
+        answer = {
+            "name": "",
+            "about": "Energy of a moving body.",
+            "symbols": [
+                {"key": r"\gamma", "meaning": "how much motion stretches time", "inside": r"\frac{1}{\sqrt{1-v^2/c^2}}"},
+                {"key": "m", "meaning": "the mass", "inside": r"\frac{"},
+                {"key": "c", "meaning": "the speed of light", "inside": ""},
+            ],
+        }
+        found = introspect(tex, client=_Claude(answer))
+        self.assertEqual(found["tier"], [r"\gamma=\frac{1}{\sqrt{1-v^2/c^2}}"])
+        self.assertEqual(len(found["define"]), 3)
+        kept = introspect(tex, tier=[r"\gamma=1+x"], client=_Claude(answer))
+        self.assertEqual(kept["tier"], [r"\gamma=1+x"])
+        self.assertTrue(render_svg(found["tex"], brief=True, define=found["define"], tier=found["tier"]))
 
     def test_what_the_caller_defined_wins(self):
         found = introspect(self.TEX, define=[r"G_{\mu\nu}=the left side"], client=_Claude(self.ANSWER))
