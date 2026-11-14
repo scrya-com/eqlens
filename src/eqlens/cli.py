@@ -46,6 +46,11 @@ def main(argv: list[str] | None = None) -> int:
         help="--legend without the plain subscripts and powers: only the rows with something to say",
     )
     parser.add_argument(
+        "--tips",
+        action="store_true",
+        help="SVG only: also show a browser tooltip with the name and meaning when a symbol is pointed at",
+    )
+    parser.add_argument(
         "--define",
         action="append",
         default=[],
@@ -99,6 +104,7 @@ def _render(tex: str, fmt: str, args) -> bytes:
         "bg": args.bg,
         "legend": args.legend,
         "brief": args.brief,
+        "tips": args.tips,
         "notes": args.note,
         "define": args.define,
         "font": args.font,

@@ -10,7 +10,7 @@
 
 <p align="center">
   One math formula, drawn as an SVG or a PNG.<br>
-  Every symbol colored, named the way you say it, and explained when you point at it.<br>
+  Every symbol colored, named the way you say it, and lit up with its meaning when you point at it.<br>
   macOS and Ubuntu. No TeX install.
 </p>
 
@@ -53,7 +53,7 @@ eqlens --legend '\psi(x)=\int_{-\infty}^{\infty}\hat{\psi}(\xi)\,e^{2\pi i x \xi
 
 ## Say what they mean
 
-`--define` gives a symbol its meaning in this formula. It gets a color, a row, and a tooltip.
+`--define` gives a symbol its meaning in this formula. It gets a color and a row.
 
 ```bash
 eqlens --legend \
@@ -82,7 +82,7 @@ eqlens --legend \
 
 ## Point at it
 
-Put the SVG inline in a web page, or open the file in a browser. Point at a symbol: every place it appears lights up with its row, the rest dims, and the tooltip says its name and meaning. It is CSS inside the SVG, with no script.
+Put the SVG inline in a web page, or open the file in a browser. Point at a symbol: every place it appears lights up with its row, and the rest dims. It is CSS inside the SVG, with no script.
 
 There are twelve formulas to try at [scrya.com/eqlens](https://scrya.com/eqlens). [USAGE.md](USAGE.md#hover) shows how to put one in your own page.
 

@@ -77,7 +77,7 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(png.startswith(b"\x89PNG"))
 
     def test_post_svg_with_a_ledger(self):
-        payload = json.dumps({"tex": r"e^{i\pi}+1=0", "legend": True, "define": ["e=Euler's number"]}).encode()
+        payload = json.dumps({"tex": r"e^{i\pi}+1=0", "legend": True, "tips": True, "define": ["e=Euler's number"]}).encode()
         request = urllib.request.Request(
             self.base + "/svg",
             data=payload,
@@ -259,7 +259,7 @@ class SvgTests(unittest.TestCase):
         self.assertGreaterEqual(render_svg(self.TEX, legend=True).count(f'fill="{color}"'), 2)
 
     def test_a_symbol_and_its_row_share_a_class_and_a_tooltip(self):
-        svg = render_svg(self.TEX, define=["P=what one token can carry"])
+        svg = render_svg(self.TEX, define=["P=what one token can carry"], tips=True)
         root = ElementTree.fromstring(svg)
         groups = [g for g in root.iter("{http://www.w3.org/2000/svg}g") if "s0" in (g.get("class") or "").split()]
         kinds = sorted((g.get("class") or "").split()[0] for g in groups)
@@ -267,6 +267,12 @@ class SvgTests(unittest.TestCase):
         for group in groups:
             self.assertEqual(group.find("{http://www.w3.org/2000/svg}title").text, "P: what one token can carry")
         self.assertIn(":has(.s0:hover)", svg)
+
+    def test_there_is_no_tooltip_unless_asked(self):
+        svg = render_svg(self.TEX, legend=True, define=["P=what one token can carry"])
+        self.assertNotIn("<title>", svg)
+        self.assertIn(":has(.s0:hover)", svg)
+        self.assertIn("<title>", render_svg(self.TEX, legend=True, tips=True))
 
     def test_two_formulas_do_not_share_ids(self):
         first = re.search(r'class="(eq[0-9a-f]+)"', render_svg("a+b")).group(1)

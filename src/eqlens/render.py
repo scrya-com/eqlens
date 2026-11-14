@@ -6,7 +6,7 @@ fractions, roots, integrals, Greek, subscripts, superscripts, \\mathrm, and
 
 With a ledger, defined symbols, or notes the formula sits on a dark card. The
 formula wears the ledger's colors. In the SVG, pointing at a symbol lights it,
-its other appearances, and its row, and its tooltip says its name and meaning.
+its other appearances, and its row. Tooltips are off unless ``tips`` is set.
 """
 
 from __future__ import annotations
@@ -73,6 +73,7 @@ def render(
     define: Sequence[str] = (),
     font: str = "sans",
     brief: bool = False,
+    tips: bool = False,
 ) -> bytes:
     """Draw ``tex`` as ``svg`` or ``png`` bytes.
 
@@ -80,7 +81,8 @@ def render(
     (ledger, defined symbols, or notes) is always opaque: ``bg`` or a dark default.
     ``legend`` names Greek, accents, and scripts. ``define`` is ``"KEY=meaning"``
     items. ``brief`` (which turns ``legend`` on) leaves plain subscripts and
-    powers out of the ledger. ``notes`` are fine print. ``font`` is one of ``sans``, ``serif``,
+    powers out of the ledger. ``notes`` are fine print. ``tips`` adds a browser
+    tooltip to each symbol in the SVG. ``font`` is one of ``sans``, ``serif``,
     ``stix``, ``cm``. ``dpi`` only matters for PNG.
     """
     if fmt not in ("svg", "png"):
@@ -106,9 +108,9 @@ def render(
     scene = _scene(formula, rows, notes, font, card)
     if fmt == "png":
         return to_png(scene, dpi=dpi, fg=color, bg=bg)
-    seed = json.dumps([text, legend, brief, notes, define, color, bg, font])
+    seed = json.dumps([text, legend, brief, notes, define, color, bg, font, tips])
     uid = "eq" + hashlib.sha1(seed.encode("utf-8")).hexdigest()[:8]
-    return to_svg(scene, uid=uid, label=text[1:-1].strip(), fg=color, bg=bg).encode("utf-8")
+    return to_svg(scene, uid=uid, label=text[1:-1].strip(), fg=color, bg=bg, tips=tips).encode("utf-8")
 
 
 def _scene(formula, rows: list[Symbol], notes: list[str], font: str, card: bool) -> Scene:

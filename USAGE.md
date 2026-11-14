@@ -34,7 +34,7 @@ eqlens --legend '\psi(x)=\int_{-\infty}^{\infty}\hat{\psi}(\xi)\,e^{2\pi i x \xi
 
 ## What a symbol means here
 
-`--define 'KEY=meaning'` gives a symbol its meaning in this formula. It gets a color, a row, and a tooltip. `KEY` is the TeX of the symbol: `P`, `A_e`, `\epsilon`, `u^\star`.
+`--define 'KEY=meaning'` gives a symbol its meaning in this formula. It gets a color and a row. `KEY` is the TeX of the symbol: `P`, `A_e`, `\epsilon`, `u^\star`.
 
 ```bash
 eqlens --legend \
@@ -50,7 +50,7 @@ eqlens --legend \
 
 ## Hover
 
-Open the SVG in a browser, or put it inline in a page. Point at a symbol: every place it appears lights up with its ledger row, the rest dims, and the tooltip says its name and meaning. Point at a ledger row and the formula shows where that symbol is. No script is involved, only CSS inside the SVG.
+Open the SVG in a browser, or put it inline in a page. Point at a symbol: every place it appears lights up with its ledger row, and the rest dims. Point at a ledger row and the formula shows where that symbol is. No script is involved, only CSS inside the SVG.
 
 Inline means the `<svg>` element itself is in the HTML. Inside `<img>` the same file is a still picture, because a browser does not let an image react to the pointer.
 
@@ -77,6 +77,7 @@ Each SVG scopes its own ids and styles, so many can share a page.
 | --- | --- |
 | `--legend` | Color Greek, and name Greek, accents, subscripts, and superscripts |
 | `--brief` | `--legend` without plain subscripts and powers: only the rows with something to say |
+| `--tips` | SVG only: also pop up a browser tooltip with the name and meaning. Off by default, since the row that lights up says the same |
 | `--define 'KEY=meaning'` | Say what a symbol means here. Repeat for more |
 | `--note 'text'` | A short note in fine print under the formula. Repeat for more lines. `$...$` renders as math |
 | `-o file` | Write a file, print its absolute path, and do not display it. `.png` writes a PNG, anything else an SVG |

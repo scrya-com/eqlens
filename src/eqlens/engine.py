@@ -180,12 +180,14 @@ def box(mark: Mark, pad: float = 1.0) -> tuple[float, float, float, float]:
     return (mark.x + left - pad, mark.y - top - pad, right - left + 2 * pad, top - bottom + 2 * pad)
 
 
-def to_svg(scene: Scene, *, uid: str, label: str, fg: str, bg: str | None) -> str:
+def to_svg(scene: Scene, *, uid: str, label: str, fg: str, bg: str | None, tips: bool = False) -> str:
     """One self-contained SVG. ``uid`` scopes its ids and CSS so many can share a page.
 
     Colors fall back to the ones given here. A page that inlines the SVG can set
     ``--eq-fg``, ``--eq-bg``, ``--eq-dim``, and ``--eq-mark`` to restyle it.
     Hover needs the SVG inline or opened on its own. Inside ``<img>`` it is a still.
+    ``tips`` adds a browser tooltip to each symbol. It is off by default: the
+    ledger row that lights up already says the same thing, and a tooltip covers it.
     """
     ids: dict[tuple[str, int, int], str] = {}
     body: list[str] = []
@@ -194,7 +196,7 @@ def to_svg(scene: Scene, *, uid: str, label: str, fg: str, bg: str | None) -> st
         count = max([count, *(index + 1 for index in group.syms)])
         classes = group.kind + "".join(f" s{index}" for index in group.syms) + (" h" if group.syms else "")
         body.append(f'<g class="{classes}">')
-        if group.tip:
+        if tips and group.tip:
             body.append(f"<title>{escape(group.tip)}</title>")
         if group.hit:
             x, y, w, h = group.hit
@@ -222,7 +224,6 @@ def to_svg(scene: Scene, *, uid: str, label: str, fg: str, bg: str | None) -> st
     if count:
         lit = ",".join(f".{uid}:has(.s{index}:hover) .s{index}" for index in range(count))
         css += [
-            f".{uid} .h{{cursor:help}}",
             f".{uid} .f,.{uid} .r{{transition:opacity .12s}}",
             f".{uid}:has(.h:hover) :is(.f,.r){{opacity:.28}}",
             f"{lit}{{opacity:1}}",

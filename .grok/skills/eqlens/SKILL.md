@@ -2,7 +2,7 @@
 name: eqlens
 description: >
   Draw a TeX-style math formula as an SVG (default) or PNG, with colored
-  symbols, a ledger that says how each symbol is read, and hover tips. Shows
+  symbols, a ledger that says how each symbol is read, and hover highlights. Shows
   it inline with the iTerm2 imgcat protocol (also WezTerm) or Kitty, or writes
   a file on Ubuntu and other terminals. Use when the user asks to show,
   typeset, or display a formula, equation, LaTeX, or math in the terminal or
@@ -44,7 +44,7 @@ One formula per call. `$...$` wrappers are optional.
 
 SVG is the default for a file and for a pipe. `-o name.png` or `--format png` gives a PNG. Both are the same picture.
 
-For a web page, write the SVG and put it inline in the HTML, not in `<img>`. Inline, pointing at a symbol lights every place it appears and its ledger row, and its tooltip says its name and meaning. Inside `<img>` the same file is a still picture. The page can restyle an inline SVG with the CSS variables `--eq-fg`, `--eq-bg`, `--eq-dim`, and `--eq-mark`.
+For a web page, write the SVG and put it inline in the HTML, not in `<img>`. Inline, pointing at a symbol lights every place it appears and its ledger row. There is no tooltip unless you pass `--tips`; leave it off, the row already says it. Inside `<img>` the same file is a still picture. The page can restyle an inline SVG with the CSS variables `--eq-fg`, `--eq-bg`, `--eq-dim`, and `--eq-mark`.
 
 ## Legend
 
@@ -64,7 +64,7 @@ Do not write `\color` in the formula: mathtext rejects it. eqlens colors the gly
 
 ## Define
 
-`--define 'KEY=meaning'` says what a symbol means in this formula. Repeat it. The symbol gets a color in the formula, a ledger row, and the meaning as its tooltip. Use it for the two to five symbols the reader has to know to follow the formula, Latin ones included.
+`--define 'KEY=meaning'` says what a symbol means in this formula. Repeat it. The symbol gets a color in the formula, and a ledger row with the meaning. Use it for the two to five symbols the reader has to know to follow the formula, Latin ones included.
 
 ```bash
 eqlens --legend \

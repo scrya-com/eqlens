@@ -96,6 +96,7 @@ class Handler(BaseHTTPRequestHandler):
             kwargs[name] = value
         kwargs["legend"] = fields.get("legend") is True
         kwargs["brief"] = fields.get("brief") is True
+        kwargs["tips"] = fields.get("tips") is True
         if fields.get("font"):
             kwargs["font"] = str(fields["font"])
         if dpi is not None:
