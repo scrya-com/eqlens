@@ -80,6 +80,16 @@ eqlens --legend \
   <img src="docs/note.png" alt="A Gaussian with sigma, pi, and mu colored, a ledger, and two short notes under it" width="640">
 </p>
 
+## Or let Claude say it
+
+`--introspect` asks Claude what the parts of the formula stand for and draws them for you. It needs `pip install 'eqlens[ai]'` and an `ANTHROPIC_API_KEY`.
+
+```bash
+eqlens --introspect -o einstein.svg 'G_{\mu\nu}+\Lambda g_{\mu\nu}=\frac{8\pi G}{c^4}T_{\mu\nu}'
+```
+
+Add `--inspect` to get the meanings as JSON, so you can keep them and draw again without a key. [USAGE.md](USAGE.md#let-claude-say-what-the-parts-mean) has the rest.
+
 ## Point at it
 
 Put the SVG inline in a web page, or open the file in a browser. Point at a symbol: every place it appears lights up with its row, and the rest dims. It is CSS inside the SVG, with no script.

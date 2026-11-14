@@ -78,6 +78,18 @@ eqlens --legend \
 
 Prefer `--define` to a `--note` when the sentence is about one symbol.
 
+## Look inside
+
+You are the model, so do the looking yourself. Do not run `--introspect`: it calls the Claude API on the user's key to do what you can do here for nothing.
+
+1. Run `eqlens --inspect '<tex>'`. It prints JSON and draws nothing: each symbol and sub-expression, how it is said, and how often it appears. No key, no network.
+2. Decide what the formula is and which three to six parts a reader must know. Prefer a whole sub-expression to its pieces: explain `G_{\mu\nu}`, not `\mu` and `\nu`.
+3. Draw it with one `--define` per part, copying each `key` from the JSON, and `--brief`. Add one `--note` with the idea of the whole formula.
+
+Use what the user and their files say the symbols mean before the textbook meaning. If you cannot tell what a part means, leave it out.
+
+`--introspect` is for a person at a shell with no model to hand. It needs `pip install 'eqlens[ai]'` and `ANTHROPIC_API_KEY`. `--introspect --inspect` prints the meanings as JSON to keep.
+
 ## Notes
 
 You may add brief intuitive notes in fine print under the formula with `--note`, one flag per line. They are small and dim, under the ledger. Use them for the idea behind the whole formula, not for one symbol and not for names.

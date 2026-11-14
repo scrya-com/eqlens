@@ -9,6 +9,10 @@ authors = [{ name = "John D. Pope" }]
 keywords = ["math", "latex", "svg", "formula", "terminal", "imgcat"]
 dependencies = ["matplotlib"]
 
+[project.optional-dependencies]
+# For --introspect, which asks Claude what the parts of a formula mean.
+ai = ["anthropic"]
+
 [project.urls]
 Homepage = "https://github.com/scrya-com/eqlens"
 

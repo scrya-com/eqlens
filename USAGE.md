@@ -48,6 +48,28 @@ eqlens --legend \
   <img src="docs/define.png" alt="A formula whose P, A sub e, and u star are colored, with a ledger giving the meaning of each" width="640">
 </p>
 
+## Let Claude say what the parts mean
+
+`--introspect` asks Claude what the symbols and sub-expressions stand for in this formula, and draws them as if you had written the `--define` lines yourself. It also adds one line saying what the formula is.
+
+```bash
+python3 -m pip install 'eqlens[ai]'
+export ANTHROPIC_API_KEY=...
+eqlens --introspect -o einstein.svg 'G_{\mu\nu}+\Lambda g_{\mu\nu}=\frac{8\pi G}{c^4}T_{\mu\nu}'
+```
+
+Claude picks the parts worth explaining, such as `G_{\mu\nu}` as a whole and not μ and ν apart. Every part it names is checked against the typeset formula, and one that is not there is dropped. A `--define` of your own wins over Claude's for the same symbol. `--context 'from a paper on video diffusion'` tells it where the formula comes from.
+
+Each call is one request to the Claude API, on your account. To ask once and keep the answer, add `--inspect`: it prints the meanings as JSON and draws nothing. Paste the `define` items into your own `--define` flags or build script, and later runs need no key.
+
+```bash
+eqlens --introspect --inspect 'i\hbar\frac{\partial}{\partial t}\Psi=\hat{H}\Psi'
+```
+
+`--inspect` alone needs no key and asks nobody. It lists what is in the formula: each symbol, how it is said, and how many times it appears.
+
+The model is `claude-opus-5-5`. Set `EQLENS_MODEL` to use another.
+
 ## Hover
 
 Open the SVG in a browser, or put it inline in a page. Point at a symbol: every place it appears lights up with its ledger row, and the rest dims. Point at a ledger row and the formula shows where that symbol is. No script is involved, only CSS inside the SVG.
@@ -78,6 +100,9 @@ Each SVG scopes its own ids and styles, so many can share a page.
 | `--legend` | Color Greek, and name Greek, accents, subscripts, and superscripts |
 | `--brief` | `--legend` without plain subscripts and powers: only the rows with something to say |
 | `--tips` | SVG only: also pop up a browser tooltip with the name and meaning. Off by default, since the row that lights up says the same |
+| `--introspect` | Ask Claude what the parts mean and draw them. Needs `eqlens[ai]` and an API key |
+| `--context 'text'` | With `--introspect`: where the formula comes from |
+| `--inspect` | Print what is in the formula as JSON and draw nothing |
 | `--define 'KEY=meaning'` | Say what a symbol means here. Repeat for more |
 | `--note 'text'` | A short note in fine print under the formula. Repeat for more lines. `$...$` renders as math |
 | `-o file` | Write a file, print its absolute path, and do not display it. `.png` writes a PNG, anything else an SVG |
@@ -99,6 +124,12 @@ from eqlens.render import render_svg, render_png
 
 svg = render_svg(r"e^{i\pi}+1=0", legend=True, define=["e=Euler's number"])
 png = render_png(r"e^{i\pi}+1=0", legend=True, dpi=220)
+
+from eqlens.introspect import inspect, introspect
+
+parts = inspect(r"u^\star=P\,\epsilon-x_0")       # no key needed
+found = introspect(r"u^\star=P\,\epsilon-x_0")    # asks Claude
+svg = render_svg(found["tex"], brief=True, define=found["define"], notes=[found["about"]])
 ```
 
 ## Claude Code

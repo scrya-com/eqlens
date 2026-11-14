@@ -1,4 +1,5 @@
 import contextlib
+import importlib.util
 import io
 import json
 import os
@@ -16,6 +17,7 @@ from equations import ALL, ML, PHYSICS, QUANTUM
 from eqlens.cli import main
 from eqlens.display import display_png
 from eqlens.engine import layout
+from eqlens.introspect import IntrospectError, inspect, introspect
 from eqlens.legend import greek_in, hints_in, notation_in, occurrences, plain, symbols
 from eqlens.render import FormulaError, render_png, render_svg
 from eqlens.server import Handler
@@ -361,6 +363,105 @@ class EquationTests(unittest.TestCase):
     def test_a_time_index_is_not_a_transpose(self):
         self.assertIn("β_1 to the t", self.tips("adam moment"))
         self.assertEqual([item[2] for item in notation_in(r"2^T")], ["$2$ to the $T$"])
+
+
+class _Block:
+    type = "text"
+
+    def __init__(self, text):
+        self.text = text
+
+
+class _Response:
+    def __init__(self, text, stop_reason="end_turn"):
+        self.content = [_Block(text)]
+        self.stop_reason = stop_reason
+
+
+class _Claude:
+    """Stands in for anthropic.Anthropic: records the request and returns a canned answer."""
+
+    def __init__(self, answer, stop_reason="end_turn"):
+        self.messages = self
+        self.answer = answer
+        self.stop_reason = stop_reason
+        self.request = None
+
+    def create(self, **request):
+        self.request = request
+        text = self.answer if isinstance(self.answer, str) else json.dumps(self.answer)
+        return _Response(text, self.stop_reason)
+
+
+@unittest.skipUnless(importlib.util.find_spec("anthropic"), "the anthropic package is not installed")
+class IntrospectTests(unittest.TestCase):
+    TEX = dict(ALL)["einstein field"]
+    ANSWER = {
+        "name": "Einstein field equations",
+        "about": "Matter and energy tell spacetime how to curve.",
+        "symbols": [
+            {"key": r"G_{\mu\nu}", "meaning": "how spacetime curves."},
+            {"key": r"T_{\mu\nu}", "meaning": "the matter and energy that is there"},
+            {"key": r"\Lambda", "meaning": "the cosmological constant"},
+            {"key": "Q_7", "meaning": "a part that is not in the formula"},
+            {"key": r"\frac{", "meaning": "broken TeX"},
+            {"key": "c", "meaning": ""},
+        ],
+    }
+
+    def test_claude_is_asked_about_this_formula(self):
+        claude = _Claude(self.ANSWER)
+        introspect(self.TEX, context="From a relativity lecture.", client=claude)
+        self.assertEqual(claude.request["model"], "claude-opus-5-5")
+        self.assertEqual(claude.request["output_config"]["format"]["type"], "json_schema")
+        prompt = claude.request["messages"][0]["content"]
+        self.assertIn(self.TEX, prompt)
+        self.assertIn(r"G_{\mu\nu}", prompt)
+        self.assertIn("From a relativity lecture.", prompt)
+
+    def test_only_parts_that_are_in_the_formula_are_kept(self):
+        found = introspect(self.TEX, client=_Claude(self.ANSWER))
+        self.assertEqual(found["name"], "Einstein field equations")
+        self.assertEqual(
+            found["define"],
+            [
+                r"G_{\mu\nu}=how spacetime curves",
+                r"T_{\mu\nu}=the matter and energy that is there",
+                r"\Lambda=the cosmological constant",
+            ],
+        )
+        svg = render_svg(self.TEX, brief=True, define=found["define"])
+        self.assertGreaterEqual(svg.count("s0"), 2)
+
+    def test_what_the_caller_defined_wins(self):
+        found = introspect(self.TEX, define=[r"G_{\mu\nu}=the left side"], client=_Claude(self.ANSWER))
+        self.assertEqual(found["define"][0], r"G_{\mu\nu}=the left side")
+        self.assertEqual(sum(item.startswith("G_") for item in found["define"]), 1)
+
+    def test_a_refusal_or_a_bad_answer_is_an_error(self):
+        with self.assertRaises(IntrospectError):
+            introspect(self.TEX, client=_Claude(self.ANSWER, stop_reason="refusal"))
+        with self.assertRaises(IntrospectError):
+            introspect(self.TEX, client=_Claude("not json"))
+        with self.assertRaises(IntrospectError):
+            introspect(self.TEX, client=_Claude("[1, 2]"))
+
+
+class InspectTests(unittest.TestCase):
+    def test_inspect_lists_the_parts(self):
+        found = inspect(r"$u^\star=P\,\epsilon-x_0$", define=["P=what one token can carry"])
+        self.assertEqual(found["tex"], r"u^\star=P\,\epsilon-x_0")
+        by_key = {row["key"]: row for row in found["symbols"]}
+        self.assertEqual(by_key[r"u^{\star}"]["says"], "u star")
+        self.assertEqual(by_key["P"], {"key": "P", "says": "", "means": "what one token can carry", "defined": True, "appears": 1})
+        self.assertEqual(by_key[r"\epsilon"]["appears"], 1)
+
+    def test_inspect_flag_prints_json_and_draws_nothing(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(main(["--inspect", r"A_e^\top A_e=I"]), 0)
+        found = json.loads(out.getvalue())
+        self.assertEqual([row["says"] for row in found["symbols"]], ["A sub e", "A_e transpose"])
 
 
 class CliTests(unittest.TestCase):

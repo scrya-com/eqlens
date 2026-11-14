@@ -58,6 +58,19 @@ def main(argv: list[str] | None = None) -> int:
         help="say what a symbol means here, for example 'P=what one token can carry'; repeat for more",
     )
     parser.add_argument(
+        "--introspect",
+        action="store_true",
+        help="ask Claude what the parts of the formula mean and draw them as --define items. "
+        "Needs `pip install 'eqlens[ai]'` and ANTHROPIC_API_KEY. Implies --brief unless --legend is given",
+    )
+    parser.add_argument("--context", default="", help="with --introspect: a sentence on where the formula comes from")
+    parser.add_argument(
+        "--inspect",
+        action="store_true",
+        help="print what is in the formula as JSON and draw nothing. With --introspect, the JSON carries Claude's "
+        "meanings as --define items, so they can be kept and drawn again without asking",
+    )
+    parser.add_argument(
         "--note",
         action="append",
         default=[],
@@ -78,6 +91,24 @@ def main(argv: list[str] | None = None) -> int:
         fmt = args.format or ("png" if (args.output or "").lower().endswith(".png") else "svg")
 
     try:
+        if args.introspect:
+            from eqlens.introspect import introspect
+
+            found = introspect(tex, context=args.context, define=args.define)
+            args.define = found["define"]
+            if not args.legend:
+                args.brief = True
+            headline = ": ".join(part for part in (found["name"], found["about"]) if part)
+            if headline and not args.note and not args.inspect:
+                args.note = [headline if _plain_note(headline) else found["about"]]
+            if args.inspect:
+                print(json.dumps(found, ensure_ascii=False, indent=2))
+                return 0
+        elif args.inspect:
+            from eqlens.introspect import inspect
+
+            print(json.dumps(inspect(tex, args.define), ensure_ascii=False, indent=2))
+            return 0
         data = _render(tex, fmt, args)
     except FormulaError as exc:
         print(f"eqlens: {exc}", file=sys.stderr)
@@ -95,6 +126,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         display_png(data, mode, sys.stdout.buffer)
     return 0
+
+
+def _plain_note(text: str) -> bool:
+    """A note is mathtext, so a stray ``$`` in a sentence would break it."""
+    return "$" not in text
 
 
 def _render(tex: str, fmt: str, args) -> bytes:
