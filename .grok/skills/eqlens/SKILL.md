@@ -74,7 +74,9 @@ eqlens --legend \
   'u^\star=P\,\epsilon-x_0,\qquad P=A_eA_e^\top'
 ```
 
-`KEY` is TeX for the symbol exactly as it appears: `P`, `A_e`, `\epsilon`, `u^\star`, `f_\uparrow`. A key that the ledger already lists keeps its spoken name and takes your meaning in place of the generic line. The meaning is a short phrase, under about 60 characters, lower case, no full stop: what the thing does here, not what it is called. `$...$` inside it draws as math. `--define` works without `--legend`; then only the defined symbols are listed.
+`KEY` is TeX for the symbol exactly as it appears: `P`, `A_e`, `\epsilon`, `u^\star`, `f_\uparrow`. A key that the ledger already lists keeps its spoken name and takes your meaning in place of the generic line. The meaning is a short phrase, under about 60 characters, lower case, no full stop: what the thing does here, not what it is called. `$...$` inside it draws as math.
+
+When the symbol is a constant with a known value, put the value and its unit after a comma: `--define 'c=the speed of light, $299\,792\,458$ m/s'`, `--define '\Lambda=the cosmological constant, about $1.1\times10^{-52}\,\mathrm{m}^{-2}$'`. Say "about" when it is measured and not exact. Give a value only when you are sure of it; a wrong number is worse than none. `--define` works without `--legend`; then only the defined symbols are listed.
 
 Prefer `--define` to a `--note` when the sentence is about one symbol.
 

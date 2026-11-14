@@ -93,7 +93,10 @@ class Mark:
 class Group:
     """Marks that hover together: one formula glyph, one ledger row, or the notes.
 
-    ``kind`` is ``f`` for the formula, ``r`` for a ledger row, ``n`` for notes.
+    ``kind`` is ``f`` for a formula, ``r`` for a ledger row, ``n`` for notes,
+    ``t`` for the rule down the side of a tier, and ``d`` for the small triangle
+    that says a row opens. ``extra`` is one more class; ``x`` marks what can be
+    clicked to open or shut the tiers.
     ``syms`` are the indexes of the symbols this group belongs to.
     """
 
@@ -103,6 +106,7 @@ class Group:
     syms: tuple[int, ...] = ()
     tip: str = ""
     hit: tuple[float, float, float, float] | None = None
+    extra: str = ""
 
 
 @dataclass
@@ -205,6 +209,8 @@ def to_svg(
     for group in scene.groups:
         count = max([count, *(index + 1 for index in group.syms)])
         classes = group.kind + "".join(f" s{index}" for index in group.syms) + (" h" if group.syms else "")
+        if group.extra:
+            classes += " " + group.extra
         body.append(f'<g class="{classes}">')
         if tips and group.tip:
             body.append(f"<title>{escape(group.tip)}</title>")
@@ -231,6 +237,13 @@ def to_svg(
     ]
     if bg:
         css.append(f".{uid} .bg{{fill:var(--eq-bg,{bg})}}")
+    if any(group.kind == "d" for group in scene.groups):
+        # The triangle shows when its symbol is pointed at, and always where there is no pointer.
+        css += [
+            f".{uid} .d{{opacity:0;transition:opacity .12s}}",
+            f"@media (hover:none){{.{uid} .d{{opacity:.7}}}}",
+            f".{uid} .x{{cursor:pointer}}",
+        ]
     if count:
         lit = ",".join(f".{uid}:has(.s{index}:hover) .s{index}" for index in range(count))
         css += [

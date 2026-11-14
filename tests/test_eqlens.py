@@ -18,7 +18,7 @@ from eqlens.cli import main
 from eqlens.display import display_png
 from eqlens.engine import layout
 from eqlens.introspect import IntrospectError, inspect, introspect
-from eqlens.legend import MAX_TIERS, greek_in, hints_in, notation_in, occurrences, plain, plan, symbols
+from eqlens.legend import MAX_TIERS, greek_in, hints_in, named_in, notation_in, occurrences, plain, plan, symbols
 from eqlens.render import FormulaError, render_html, render_png, render_svg
 from eqlens.server import Handler
 
@@ -337,7 +337,7 @@ class EquationTests(unittest.TestCase):
     def test_quantum_readings(self):
         tips = self.tips("schrodinger")
         self.assertEqual(tips[0], "Psi")
-        self.assertIn("h bar. Planck's constant divided by 2π.", tips)
+        self.assertIn("h bar. Planck's constant divided by 2π, about 1.055×10^-34 J s.", tips)
         self.assertIn("H hat. An estimate of H, or in quantum mechanics an operator.", tips)
         self.assertIn("ℏ squared", self.tips("stationary schrodinger"))
         self.assertEqual(self.tips("unitary"), ["U dagger. U transposed and complex-conjugated. Not a power."])
@@ -418,6 +418,79 @@ class TierTests(unittest.TestCase):
     def test_a_definition_reaches_a_symbol_inside_a_tier(self):
         _top, rows = plan(self.TEX, legend=False, define=["A_e=squeezes a cell into one token"], tier=self.TIERS)
         self.assertEqual({row.key: row.hint for row in rows}["A_{e}"], "squeezes a cell into one token")
+
+    def test_h_bar_opens_into_what_it_is_made_of(self):
+        tex = dict(ALL)["schrodinger"]
+        top, rows = plan(tex, known=True)
+        inside = {rows[index].key: tier for index, tier in top.rows}[r"\hbar"]
+        self.assertEqual(inside.tex, r"\hbar=\frac{h}{2\pi}")
+        self.assertEqual([rows[index].key for index, _tier in inside.rows], [r"\pi"])
+        closed, _rows = plan(tex)
+        self.assertTrue(all(tier is None for _index, tier in closed.rows))
+
+    def test_the_laplacian_opens_and_a_tier_of_your_own_wins(self):
+        top, rows = plan(dict(ALL)["heat"], known=True)
+        inside = {rows[index].key: tier for index, tier in top.rows}[r"\nabla^{2}"]
+        self.assertIn(r"\partial x^2", inside.tex)
+        top, rows = plan(dict(ALL)["schrodinger"], known=True, tier=[r"\hbar=1.054\times 10^{-34}"])
+        self.assertEqual({rows[i].key: t for i, t in top.rows}[r"\hbar"].tex, r"\hbar=1.054\times 10^{-34}")
+
+    def test_known_tiers_are_behind_expand_in_html_and_off_in_svg(self):
+        tex = dict(ALL)["schrodinger"]
+        page = render_html(tex, legend=True)
+        self.assertEqual(page.count('class="eqlens-expand"'), 1)
+        shut, wide = page.split('<div class="eqlens-open" hidden>')
+        self.assertEqual(shut.count('<g class="t">'), 0)
+        self.assertEqual(wide.count('<g class="t">'), 1)
+        self.assertEqual(render_svg(tex, legend=True).count('<g class="t">'), 0)
+        self.assertEqual(render_svg(tex, legend=True, known=True).count('<g class="t">'), 1)
+        self.assertNotIn('class="eqlens-expand"', render_html(tex, legend=True, known=False))
+        self.assertNotIn('class="eqlens-expand"', render_html("E=mc^2", legend=True))
+
+    def test_what_opens_shows_a_triangle_and_can_be_clicked(self):
+        page = render_html(self.TEX, define=["P=keeps the coarse part"], tier=self.TIERS)
+        shut, wide = page.split('<div class="eqlens-open" hidden>')
+        # Shut: one triangle, on P. Its row and both of its glyphs in the formula can be clicked.
+        self.assertEqual(len(re.findall(r'<g class="d s0 h">', shut)), 1)
+        self.assertEqual(len(re.findall(r'<g class="r s0 h x">', shut)), 1)
+        self.assertEqual(len(re.findall(r'<g class="f s0 h x">', shut)), 2)
+        self.assertEqual(len(re.findall(r'<g class="d ', shut)), 1)
+        # Open: P and A_e each have a triangle, now for shutting.
+        self.assertEqual(len(re.findall(r'<g class="d ', wide)), 2)
+        self.assertIn("@media (hover:none)", shut)
+        self.assertIn("flip(", page)
+        # A drawing on its own has nothing to click.
+        alone = render_svg(self.TEX, define=["P=keeps the coarse part"], tier=self.TIERS)
+        self.assertNotIn('class="d ', alone)
+        self.assertNotIn(" x\"", alone)
+
+    def test_a_letter_is_not_the_bigger_symbol_it_sits_in(self):
+        tex = r"G_{\mu\nu}=R_{\mu\nu}-\frac{1}{2}R\,g_{\mu\nu}"
+        svg = render_svg(tex, define=[r"R_{\mu\nu}=the Ricci tensor", "R=the Ricci scalar"], credit=False)
+        root = ElementTree.fromstring(svg)
+        groups = [g.get("class").split() for g in root.iter("{http://www.w3.org/2000/svg}g")]
+        # The lone R is one glyph and R_{mu nu} is three: the R inside the tensor is not the scalar.
+        self.assertEqual(sum("s0" in g and g[0] == "f" for g in groups), 1)
+        self.assertEqual(sum("s1" in g and g[0] == "f" for g in groups), 3)
+        self.assertEqual(sum("s0" in g and "s1" in g for g in groups), 0)
+        # A_e inside A_e^T is still A_e: the transpose was given no meaning of its own.
+        svg = render_svg(r"P=A_eA_e^\top", legend=True, define=["A_e=the squeeze"], credit=False)
+        root = ElementTree.fromstring(svg)
+        rows = [g.get("class").split() for g in root.iter("{http://www.w3.org/2000/svg}g")]
+        both = [g for g in rows if g[0] == "f" and len([c for c in g if c.startswith("s")]) == 2]
+        self.assertEqual(len(both), 2)
+
+    def test_a_symbol_in_the_formula_is_listed_there_not_inside_a_tier(self):
+        tex = r"G_{\mu\nu}+\Lambda g_{\mu\nu}=0"
+        top, rows = plan(tex, legend=False, define=[r"g_{\mu\nu}=the metric"], tier=[r"G_{\mu\nu}=R_{\mu\nu}-\frac{1}{2}R\,g_{\mu\nu}"])
+        self.assertEqual(sorted(rows[index].key for index, _tier in top.rows), [r"G_{\mu\nu}", r"g_{\mu\nu}"])
+
+    def test_a_constant_can_carry_its_value(self):
+        meaning = r"\Lambda=the cosmological constant, about $1.1\times10^{-52}\,\mathrm{m}^{-2}$"
+        row = symbols(r"\Lambda g", legend=False, define=[meaning])[0]
+        self.assertEqual(row.tip, "Lambda. the cosmological constant, about 1.1×10^-52 m^-2")
+        self.assertTrue(render_svg(r"\Lambda g", define=[meaning]))
+        self.assertIn("1.055", dict((key, hint) for key, _name, hint in named_in(r"\hbar"))[r"\hbar"])
 
     def test_bad_tiers_are_rejected(self):
         for item in ("P", "=x", r"P=\frac{", r"\frac{=x"):

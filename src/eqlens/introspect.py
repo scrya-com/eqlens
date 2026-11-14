@@ -46,7 +46,11 @@ you were given.
 - meaning: what it does or stands for here, in plain words. At most 60 \
 characters, lower case except proper names, no full stop. Say what it is for, \
 not what it is called: "how spacetime curves", not "the Einstein tensor". No \
-equations in it.
+equations in it. When the part is a constant with a known value, add the value \
+and its unit after a comma, as TeX between $ signs, and the limit is then 100 \
+characters: "the speed of light, $299\\,792\\,458$ m/s", "the cosmological \
+constant, about $1.1\\times10^{-52}\\,\\mathrm{m}^{-2}$". Say "about" when the \
+value is measured and not exact. Give a value only when you are sure of it.
 
 Also give:
 - name: what the formula is usually called, such as "Einstein field equations", \
@@ -88,7 +92,7 @@ def inspect(tex: str, define: Sequence[str] = (), tier: Sequence[str] = ()) -> d
     A symbol that opens into a tier carries ``"tier"``: that formula and its own rows, in the same form.
     """
     text = normalize_tex(tex)[1:-1].strip()
-    top, rows = plan(text, define=define, tier=tier)
+    top, rows = plan(text, define=define, tier=tier, known=True)
     return _describe(top, rows)
 
 

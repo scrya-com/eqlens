@@ -69,6 +69,13 @@ def main(argv: list[str] | None = None) -> int:
         help="what a symbol is made of, drawn under its row as a formula of its own, for example "
         "'P=A_eA_e^\\top'; repeat for more. A symbol inside a tier can have a tier too",
     )
+    parser.add_argument(
+        "--known",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="open symbols whose meaning is a well-known formula, such as h bar into h over 2 pi. "
+        "On by default for html, where tiers start shut; off for svg and png",
+    )
     parser.add_argument("--no-credit", action="store_true", help="leave the small eqlens mark off an SVG card")
     parser.add_argument(
         "--introspect",
@@ -158,6 +165,7 @@ def _render(tex: str, fmt: str, args) -> bytes:
         "tips": args.tips,
         "tier": args.tier,
         "credit": not args.no_credit,
+        "known": args.known,
         "notes": args.note,
         "define": args.define,
         "font": args.font,

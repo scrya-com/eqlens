@@ -83,13 +83,16 @@ def render(
     tips: bool = False,
     tier: Sequence[str] = (),
     credit: bool = True,
+    known: bool | None = None,
+    _disclose: str | None = None,
 ) -> bytes:
     """Draw ``tex`` as ``svg``, ``png``, or ``html`` bytes.
 
     ``html`` is a fragment to put in a page: the SVG under a small bar with a
     Copy button (the TeX goes to the clipboard) and, when there are tiers, an
-    Expand button that swaps in the drawing with the tiers open. It is the only
-    output with a script in it.
+    Expand button that swaps in the drawing with the tiers open. A symbol that
+    opens shows a small triangle when pointed at, and clicking it or its row
+    does what Expand does. It is the only output with a script in it.
 
     ``bg`` None or ``"transparent"`` keeps a bare formula transparent. A card
     (ledger, defined symbols, or notes) is always opaque: ``bg`` or a dark default.
@@ -98,7 +101,10 @@ def render(
     powers out of the ledger. ``notes`` are fine print. ``tips`` adds a browser
     tooltip to each symbol in the SVG. ``tier`` is ``"KEY=formula"`` items:
     what a symbol is made of, drawn under its row as a formula of its own.
-    ``credit`` puts the small eqlens mark, a link, in the corner of an SVG card. ``font`` is one of ``sans``, ``serif``,
+    ``credit`` puts the small eqlens mark, a link, in the corner of an SVG card.
+    ``known`` opens symbols whose meaning is a well-known formula, such as h bar
+    into h over 2 pi. Left as None it is on for ``html``, where tiers start shut,
+    and off for ``svg`` and ``png``, where they would make every card taller. ``font`` is one of ``sans``, ``serif``,
     ``stix``, ``cm``. ``dpi`` only matters for PNG.
     """
     if fmt not in ("svg", "png", "html"):
@@ -121,16 +127,21 @@ def render(
     if fmt == "html":
         options = dict(dpi=dpi, color=color, bg=bg, legend=legend, notes=notes, define=define, font=font)
         options.update(brief=brief, tips=tips, credit=credit)
-        shut = render(text, "svg", **options).decode("utf-8")
-        wide = render(text, "svg", tier=tier, **options).decode("utf-8") if tier else ""
+        opens = known is not False
+        wide = render(text, "svg", tier=tier, known=opens, _disclose="open", **options).decode("utf-8")
+        if _tiers(wide):
+            shut = render(text, "svg", tier=tier, known=opens, _disclose="shut", **options).decode("utf-8")
+        else:
+            wide = ""
+            shut = render(text, "svg", known=False, **options).decode("utf-8")
         return _html(text[1:-1].strip(), shut, wide).encode("utf-8")
 
     formula = layout(text, _FORMULA, font)
-    top, rows = plan(text[1:-1], legend=legend or brief, define=define, tier=tier, brief=brief)
+    top, rows = plan(text[1:-1], legend=legend or brief, define=define, tier=tier, brief=brief, known=bool(known))
     card = bool(rows or notes)
     if card:
         bg = bg or _CARD
-    scene = _scene(formula, top, rows, notes, font, card)
+    scene = _scene(formula, top, rows, notes, font, card, _disclose)
     if fmt == "png":
         return to_png(scene, dpi=dpi, fg=color, bg=bg)
     mark = None
@@ -138,7 +149,7 @@ def render(
         # Room under the last line, then the mark in the corner.
         scene.height += 14.0
         mark = (scene.width - SIZE - 8.0, scene.height - SIZE - 8.0, SIZE, URL, LOGO_PNG_BASE64)
-    seed = json.dumps([text, legend, brief, notes, define, tier, color, bg, font, tips, credit])
+    seed = json.dumps([text, legend, brief, notes, define, tier, color, bg, font, tips, credit, bool(known), _disclose])
     uid = "eq" + hashlib.sha1(seed.encode("utf-8")).hexdigest()[:8]
     return to_svg(scene, uid=uid, label=text[1:-1].strip(), fg=color, bg=bg, tips=tips, credit=mark).encode("utf-8")
 
@@ -156,12 +167,15 @@ _STYLE = (
 _SCRIPT = (
     "(function(){if(window.__eqlens)return;window.__eqlens=1;"
     "document.addEventListener('click',function(e){"
-    "var b=e.target.closest&&e.target.closest('.eqlens-bar button');if(!b)return;"
+    "if(!e.target.closest)return;"
+    "function flip(f){var o=f.querySelector('.eqlens-open'),c=f.querySelector('.eqlens-closed'),"
+    "k=f.querySelector('.eqlens-expand'),open=o.hidden;o.hidden=!open;c.hidden=open;"
+    "k.setAttribute('aria-expanded',String(open));k.textContent=open?'Collapse':'Expand'}"
+    # A symbol that opens, or its row, does what the Expand button does.
+    "var x=e.target.closest('.eqlens svg .x');if(x){flip(x.closest('.eqlens'));return}"
+    "var b=e.target.closest('.eqlens-bar button');if(!b)return;"
     "var f=b.closest('.eqlens');"
-    "if(b.classList.contains('eqlens-expand')){"
-    "var o=f.querySelector('.eqlens-open'),c=f.querySelector('.eqlens-closed'),open=o.hidden;"
-    "o.hidden=!open;c.hidden=open;b.setAttribute('aria-expanded',String(open));"
-    "b.textContent=open?'Collapse':'Expand';return}"
+    "if(b.classList.contains('eqlens-expand')){flip(f);return}"
     "var t=f.getAttribute('data-tex');"
     "function done(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1200)}"
     "function old(){var a=document.createElement('textarea');a.value=t;a.style.position='fixed';"
@@ -171,6 +185,11 @@ _SCRIPT = (
     "else{old()}"
     "})})();"
 )
+
+
+def _tiers(svg: str) -> int:
+    """How many tiers a drawing has open: each one has a rule down its side."""
+    return svg.count('<g class="t">')
 
 
 def _html(tex: str, shut: str, wide: str) -> str:
@@ -186,11 +205,28 @@ def _html(tex: str, shut: str, wide: str) -> str:
     )
 
 
-def _scene(formula, top: Block, rows: list[Symbol], notes: list[str], font: str, card: bool) -> Scene:
+def _openable(block: Block, deep: bool) -> set[int]:
+    """The symbols that open into a tier: on this block, and in its tiers too when ``deep``."""
+    found: set[int] = set()
+    for index, tier in block.rows:
+        if tier:
+            found.add(index)
+            if deep:
+                found |= _openable(tier, deep)
+    return found
+
+
+def _scene(
+    formula, top: Block, rows: list[Symbol], notes: list[str], font: str, card: bool, disclose: str | None = None
+) -> Scene:
+    """``disclose`` is None for a plain drawing with every tier open, ``"shut"`` for
+    one with the tiers shut and a triangle on each row that opens, or ``"open"``
+    for the tiers open and a triangle that shuts them."""
     pad = _CARD_PAD if card else _PAD
+    click = _openable(top, deep=disclose == "open") if disclose else set()
     lines = [layout(note if parses(note) else note.replace("$", r"\$"), _FINE, font) for note in notes]
     # Lay the ledger out once to learn how wide it is, then again where it goes.
-    ledger_width, _bottom = _ledger(Scene(0.0, 0.0), top, rows, 0.0, 0.0, font)
+    ledger_width, _bottom = _ledger(Scene(0.0, 0.0), top, rows, 0.0, 0.0, font, disclose, click)
     under = max([ledger_width, *(line.width for line in lines)], default=0.0)
     inner = max(formula.width, under)
     width = inner + 2 * pad
@@ -200,11 +236,11 @@ def _scene(formula, top: Block, rows: list[Symbol], notes: list[str], font: str,
 
     scene = Scene(width, 0.0)
     y = pad
-    _formula_groups(scene, formula, rows, formula_x, y + formula.ascent, font)
+    _formula_groups(scene, formula, rows, formula_x, y + formula.ascent, font, click)
     y += formula.ascent + formula.descent
 
     if top.rows:
-        _width, y = _ledger(scene, top, rows, left, y + _SECTION, font)
+        _width, y = _ledger(scene, top, rows, left, y + _SECTION, font, disclose, click)
     if lines:
         y += _SECTION
         group = Group("n")
@@ -218,7 +254,16 @@ def _scene(formula, top: Block, rows: list[Symbol], notes: list[str], font: str,
     return scene
 
 
-def _ledger(scene: Scene, block: Block, rows: list[Symbol], left: float, y: float, font: str) -> tuple[float, float]:
+def _ledger(
+    scene: Scene,
+    block: Block,
+    rows: list[Symbol],
+    left: float,
+    y: float,
+    font: str,
+    disclose: str | None = None,
+    click: frozenset[int] | set[int] = frozenset(),
+) -> tuple[float, float]:
     """Draw a block's rows from ``(left, y)`` down. Return how wide they are and where they end.
 
     A row with a tier is followed by that tier's formula and rows, set in under
@@ -242,20 +287,29 @@ def _ledger(scene: Scene, block: Block, rows: list[Symbol], left: float, y: floa
             _add(group, fine, text_x, y + fine.ascent, "dim")
             y += fine.ascent + fine.descent
         reach = text_x + max(main.width, fine.width if fine else 0.0)
+        if tier and disclose:
+            # A triangle after the name: pointing right when shut, down when open.
+            group.extra = "x"
+            arrow = layout(r"$\blacktriangleright$" if disclose == "shut" else r"$\blacktriangledown$", 8.0, font)
+            sign = Group("d", syms=(index,))
+            at = text_x + main.width + (7.0 if main.width else 0.0)
+            _add(sign, arrow, at, top + ascent - 1.0, "dim")
+            scene.groups.append(sign)
+            reach = max(reach, at + arrow.width)
         group.hit = (left - 6, top - _ROW / 2, reach - left + 12, y - top + _ROW)
         scene.groups.append(group)
         right = max(right, reach)
-        if tier:
+        if tier and disclose != "shut":
             y += _ROW
             inside_top = y
             inside = layout(f"${tier.tex}$", _TIER, font)
-            _formula_groups(scene, inside, rows, text_x, y + inside.ascent, font)
+            _formula_groups(scene, inside, rows, text_x, y + inside.ascent, font, click)
             y += inside.ascent + inside.descent
             right = max(right, text_x + inside.width)
             if tier.rows:
-                width, y = _ledger(scene, tier, rows, text_x, y + _ROW + 2.0, font)
+                width, y = _ledger(scene, tier, rows, text_x, y + _ROW + 2.0, font, disclose, click)
                 right = max(right, text_x + width)
-            scene.groups.append(Group("n", rules=[(text_x - 11.0, inside_top - 2.0, 1.2, y - inside_top + 4.0, "dim")]))
+            scene.groups.append(Group("t", rules=[(text_x - 11.0, inside_top - 2.0, 1.2, y - inside_top + 4.0, "dim")]))
             y += 4.0
         y += _ROW
     return right - left, y - _ROW
@@ -271,11 +325,22 @@ def _row_runs(row: Symbol, font: str):
     return glyph, Run(0.0, 0.0, 0.0, (), ()), None
 
 
-def _formula_groups(scene: Scene, formula, rows: list[Symbol], x: float, baseline: float, font: str) -> None:
+def _formula_groups(
+    scene: Scene, formula, rows: list[Symbol], x: float, baseline: float, font: str, click=frozenset()
+) -> None:
     """One group per glyph, so each can carry its own color, symbols, and tooltip."""
     member: dict[int, list[tuple[int, int]]] = {}
+    places = [occurrences(formula, row.key, font) for row in rows]
     for index, row in enumerate(rows):
-        for found in occurrences(formula, row.key, font):
+        for found in places[index]:
+            # R and R_{\mu\nu} are two things when both are given a meaning: the R
+            # inside R_{\mu\nu} is not the first one. A_e inside A_e^\top still is A_e,
+            # because nobody gave A_e^\top a meaning of its own.
+            if row.defined and any(
+                other is not row and other.defined and any(found < bigger for bigger in places[at])
+                for at, other in enumerate(rows)
+            ):
+                continue
             for glyph in found:
                 member.setdefault(glyph, []).append((len(found), index))
     marks, rules = place(formula, x, baseline, "fg")
@@ -289,6 +354,8 @@ def _formula_groups(scene: Scene, formula, rows: list[Symbol], x: float, baselin
         if colored:
             mark.fill = rows[colored[0]].color
         group = Group("f", marks=[mark], syms=tuple(sorted({index for _size, index in owners})))
+        if any(index in click for _size, index in owners):
+            group.extra = "x"
         if owners:
             # Widest reading first: "A sub e transpose" before "A sub e".
             group.tip = "\n".join(rows[index].tip for _size, index in sorted(owners, reverse=True))

@@ -36,6 +36,8 @@ eqlens --legend '\psi(x)=\int_{-\infty}^{\infty}\hat{\psi}(\xi)\,e^{2\pi i x \xi
 
 `--define 'KEY=meaning'` gives a symbol its meaning in this formula. It gets a color and a row. `KEY` is the TeX of the symbol: `P`, `A_e`, `\epsilon`, `u^\star`.
 
+A constant can carry its value. `$...$` in a meaning draws as math: `--define 'c=the speed of light, $299\,792\,458$ m/s'`. `--introspect` asks Claude to do this for constants it is sure of.
+
 ```bash
 eqlens --legend \
   --define 'P=keeps the part of the noise the cell can see' \

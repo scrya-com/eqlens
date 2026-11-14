@@ -118,7 +118,7 @@ _FONTS = {"mathrm", "text", "mathit", "mathsf", "mathbf", "mathtt", "operatornam
 _WORD = re.compile(r"^\\(?:mathrm|text|mathit|mathsf|operatorname)\{[A-Za-z][A-Za-z -]+\}$")
 # Symbols with a name of their own that are not Greek: command, spoken name, meaning.
 _NAMED = (
-    ("hbar", "h bar", "Planck's constant divided by $2\\pi$."),
+    ("hbar", "h bar", "Planck's constant divided by $2\\pi$, about $1.055\\times10^{-34}$ J s."),
     ("nabla", "del", "The gradient: which way a value rises fastest, and how fast."),
     ("partial", "partial", "A derivative in one variable, holding the others still."),
     ("odot", "elementwise product", "Multiply matching entries, one by one."),
@@ -141,6 +141,15 @@ _NAMED = (
 )
 _NAMED_AT = re.compile(r"\\(mathbb|mathcal)\s*\{\s*([A-Za-z0-9])\s*\}|\\([A-Za-z]+)")
 _LAPLACIAN = "The Laplacian: how a point differs from the average around it."
+# Symbols whose meaning is itself a formula. They open into it without being asked:
+# symbol, and what it is made of.
+_KNOWN_TIERS = (
+    (r"\hbar", r"\frac{h}{2\pi}"),
+    (
+        r"\nabla^{2}",
+        r"\frac{\partial^2}{\partial x^2}+\frac{\partial^2}{\partial y^2}+\frac{\partial^2}{\partial z^2}",
+    ),
+)
 _NOTATION_COLOR = "#c9d1d9"
 _NOTE_COLOR = "#8b949e"
 # Colors for defined symbols that are not Greek, in the order they are defined.
@@ -476,6 +485,7 @@ def plan(
     define: Sequence[str] = (),
     tier: Sequence[str] = (),
     brief: bool = False,
+    known: bool = False,
 ) -> tuple[Block, list[Symbol]]:
     """The formula, its rows, and the tiers its symbols open into.
 
@@ -484,8 +494,14 @@ def plan(
     and a symbol in there may have a tier too. One list of symbols is shared by
     every tier, so a symbol is the same color, and lights up, wherever it appears,
     and it is listed once: under the first formula that has it.
+
+    ``known`` also opens the symbols whose meaning is a formula everyone uses:
+    h bar into h over 2 pi, and the Laplacian into its second derivatives. A
+    ``tier`` item for the same symbol wins.
     """
     tiers: dict[tuple, tuple[str, str]] = {}
+    if known:
+        tiers = {_shape(key): (key, inside) for key, inside in _KNOWN_TIERS}
     for item in tier:
         key, sep, inside = (item or "").partition("=")
         key = key.strip().strip("$").strip()
@@ -531,6 +547,9 @@ def plan(
                 row = next((row for row in known if _shape(row.key) == shape), None)
                 rows.append(row or Symbol(tiers[shape][0], "", "", None))
         block = Block(text)
+        # List everything this formula has before opening any tier, so a symbol
+        # that is in this formula is listed here and not inside a tier that also has it.
+        fresh: list[tuple] = []
         for row in rows:
             shape = _shape(row.key)
             if shape in index_of:
@@ -541,6 +560,9 @@ def plan(
                 row.color = color()
             index_of[shape] = len(registry)
             registry.append(row)
+            fresh.append(shape)
+        for shape in fresh:
+            row = registry[index_of[shape]]
             inside = build(f"{row.key}={tiers[shape][1]}", path | {shape}) if shape in opens else None
             block.rows.append((index_of[shape], inside))
         return block
