@@ -55,11 +55,14 @@ class FormulaError(ValueError):
 
 @dataclass(frozen=True)
 class Glyph:
+    """``index`` is the glyph's index in its font, or -1 when matplotlib gives only ``num``."""
+
     font: str
     num: int
     size: float
     x: float
     y: float
+    index: int = -1
 
 
 @dataclass(frozen=True)
@@ -83,6 +86,7 @@ class Mark:
     x: float
     y: float
     fill: str
+    index: int = -1
 
 
 @dataclass
@@ -118,9 +122,13 @@ def layout(text: str, size: float, font: str = "sans") -> Run:
         except Exception as exc:
             raise FormulaError(" ".join(str(exc).split()) or "could not parse formula") from exc
         glyphs = []
-        for face, size_, num, x, y in parsed.glyphs:
+        for item in parsed.glyphs:
+            # matplotlib 3.11 adds the glyph index: (font, size, char, index, x, y).
+            face, size_, num = item[:3]
+            index = int(item[3]) if len(item) == 6 else -1
+            x, y = item[-2:]
             _FACES.setdefault(face.fname, face)
-            glyphs.append(Glyph(face.fname, int(num), float(size_), float(x), float(y)))
+            glyphs.append(Glyph(face.fname, int(num), float(size_), float(x), float(y), index))
     rules = tuple((float(x), float(y), float(w), float(h)) for x, y, w, h in parsed.rects)
     depth = float(parsed.depth)
     return Run(float(parsed.width), float(parsed.height) - depth, depth, tuple(glyphs), rules)
@@ -135,25 +143,28 @@ def parses(text: str) -> bool:
 
 
 @lru_cache(maxsize=4096)
-def outline(font: str, num: int) -> tuple[np.ndarray, np.ndarray]:
+def outline(font: str, num: int, index: int = -1) -> tuple[np.ndarray, np.ndarray]:
     """The glyph's outline at 100 pt, y up. Empty for a space."""
     with LOCK:
         face = _FACES[font]
         face.set_size(_UNIT, 72)
-        face.load_char(num, flags=_NO_HINTING)
+        if index >= 0:
+            face.load_glyph(index, flags=_NO_HINTING)
+        else:
+            face.load_char(num, flags=_NO_HINTING)
         verts, codes = face.get_path()
     return np.array(verts, dtype=float).reshape(-1, 2), np.array(codes, dtype=np.uint8)
 
 
 def has_ink(glyph: Glyph) -> bool:
     """False for a space."""
-    return len(outline(glyph.font, glyph.num)[0]) > 0
+    return len(outline(glyph.font, glyph.num, glyph.index)[0]) > 0
 
 
 def place(run: Run, x: float, baseline: float, fill: str) -> tuple[list[Mark], list[tuple[float, float, float, float, str]]]:
     """Put a run in scene coordinates. Spaces are dropped."""
     marks = [
-        Mark(g.font, g.num, g.size / _UNIT, x + g.x, baseline - g.y, fill)
+        Mark(g.font, g.num, g.size / _UNIT, x + g.x, baseline - g.y, fill, g.index)
         for g in run.glyphs
         if has_ink(g)
     ]
@@ -163,7 +174,7 @@ def place(run: Run, x: float, baseline: float, fill: str) -> tuple[list[Mark], l
 
 def box(mark: Mark, pad: float = 1.0) -> tuple[float, float, float, float]:
     """The mark's ink box in scene coordinates, a little larger so it is easy to point at."""
-    verts, _codes = outline(mark.font, mark.num)
+    verts, _codes = outline(mark.font, mark.num, mark.index)
     left, bottom = verts.min(axis=0) * mark.scale
     right, top = verts.max(axis=0) * mark.scale
     return (mark.x + left - pad, mark.y - top - pad, right - left + 2 * pad, top - bottom + 2 * pad)
@@ -176,7 +187,7 @@ def to_svg(scene: Scene, *, uid: str, label: str, fg: str, bg: str | None) -> st
     ``--eq-fg``, ``--eq-bg``, ``--eq-dim``, and ``--eq-mark`` to restyle it.
     Hover needs the SVG inline or opened on its own. Inside ``<img>`` it is a still.
     """
-    ids: dict[tuple[str, int], str] = {}
+    ids: dict[tuple[str, int, int], str] = {}
     body: list[str] = []
     count = 0
     for group in scene.groups:
@@ -191,7 +202,7 @@ def to_svg(scene: Scene, *, uid: str, label: str, fg: str, bg: str | None) -> st
         for x, y, w, h, fill in group.rules:
             body.append(f'<rect x="{_n(x)}" y="{_n(y)}" width="{_n(w)}" height="{_n(h)}"{_fill(fill)}/>')
         for mark in group.marks:
-            key = (mark.font, mark.num)
+            key = (mark.font, mark.num, mark.index)
             if key not in ids:
                 ids[key] = f"{uid}g{len(ids)}"
             body.append(
@@ -233,7 +244,7 @@ def to_png(scene: Scene, *, dpi: int, fg: str, bg: str | None) -> bytes:
     by_color: dict[str, list[Path]] = {}
     for group in scene.groups:
         for mark in group.marks:
-            verts, codes = outline(mark.font, mark.num)
+            verts, codes = outline(mark.font, mark.num, mark.index)
             placed = verts * (mark.scale, -mark.scale) + (mark.x, mark.y)
             by_color.setdefault(colors.get(mark.fill, mark.fill), []).append(Path(placed, codes))
         for x, y, w, h, fill in group.rules:
