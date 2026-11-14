@@ -1,7 +1,7 @@
-// Turn a /mathcat line into one formula, and size the pane box to the PNG.
+// Turn a /eqlens line into one formula, and size the pane box to the PNG.
 // Terminal cells are about twice as tall as they are wide.
 
-const FLAGS = new Set(['--legend', '--note', '--local', '--'])
+const FLAGS = new Set(['--legend', '--note', '--define', '--local', '--'])
 
 export function parse(text) {
   const raw = String(text ?? '').trim()
@@ -12,6 +12,7 @@ export function parse(text) {
 
   let legend = false
   const notes = []
+  const defines = []
   const tex = []
   for (let i = 0; i < tokens.value.length; i++) {
     const token = tokens.value[i]
@@ -30,8 +31,14 @@ export function parse(text) {
       notes.push(note)
       continue
     }
+    if (token === '--define') {
+      const item = tokens.value[++i]
+      if (item == null || !/^[^=]+=.*\S/.test(item)) return { error: 'A --define needs KEY=meaning.' }
+      defines.push(item)
+      continue
+    }
     if (token.startsWith('--') && FLAGS.has(token) === false && !tex.length) {
-      return { error: 'The pane takes the formula, --legend, and --note.' }
+      return { error: 'The pane takes the formula, --legend, --define, and --note.' }
     }
     tex.push(token)
   }
@@ -42,13 +49,16 @@ export function parse(text) {
   if (formula.length > 4000) return { error: 'That formula is too long.' }
   if (notes.length > 12) return { error: 'Too many notes.' }
   if (notes.some((note) => note.length > 500)) return { error: 'A note is too long.' }
-  return { kind: 'draw', tex: formula, legend, notes }
+  if (defines.length > 24) return { error: 'Too many definitions.' }
+  if (defines.some((item) => item.length > 500)) return { error: 'A definition is too long.' }
+  return { kind: 'draw', tex: formula, legend, notes, defines }
 }
 
 export function drawArgv(path, job) {
-  const argv = ['mathcat', '--local', '-o', path]
+  const argv = ['eqlens', '--local', '-o', path]
   if (job.legend) argv.push('--legend')
   for (const note of job.notes) argv.push('--note', note)
+  for (const item of job.defines || []) argv.push('--define', item)
   argv.push('--', job.tex)
   return argv
 }
@@ -77,10 +87,10 @@ export function screenPng(text) {
     .map((line) => line.trim())
     .filter(Boolean)
     .pop()
-  if (!path || !path.startsWith('/tmp/mathcat-pane/') || !path.toLowerCase().endsWith('.png')) {
-    return { error: 'mathcat did not write a PNG.' }
+  if (!path || !path.startsWith('/tmp/eqlens-pane/') || !path.toLowerCase().endsWith('.png')) {
+    return { error: 'eqlens did not write a PNG.' }
   }
-  if (path.includes('\0') || path.split('/').includes('..')) return { error: 'mathcat did not write a PNG.' }
+  if (path.includes('\0') || path.split('/').includes('..')) return { error: 'eqlens did not write a PNG.' }
   return { path }
 }
 

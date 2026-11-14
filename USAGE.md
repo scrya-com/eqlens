@@ -1,14 +1,16 @@
 # Usage
 
-Install is on the [README](README.md). If you are an LLM, follow the skill instead of this page: [`.grok/skills/mathcat/SKILL.md`](.grok/skills/mathcat/SKILL.md).
+Install is on the [README](README.md). If you are an LLM, follow the skill instead of this page: [`.grok/skills/eqlens/SKILL.md`](.grok/skills/eqlens/SKILL.md).
 
 ```bash
-mathcat 'x=\frac{-b\pm\sqrt{b^{2}-4ac}}{2a}'
-mathcat 'e^{i\pi}+1=0' | imgcat
-mathcat -o formula.png 'E=mc^2'
+eqlens 'x=\frac{-b\pm\sqrt{b^{2}-4ac}}{2a}'
+eqlens -o formula.svg 'E=mc^2'
+eqlens -o formula.png 'E=mc^2'
+eqlens 'E=mc^2' > formula.svg
+eqlens --format png 'e^{i\pi}+1=0' | imgcat
 ```
 
-On iTerm2 and WezTerm the picture is inline. Kitty draws it with the Kitty graphics protocol. Ubuntu GNOME Terminal, xterm, and the Linux console print a path to a PNG.
+On iTerm2, WezTerm, and Kitty the picture is inline, as a PNG, because a terminal paints pixels. Everywhere else the default is an SVG: a file from `-o`, the text itself through a pipe, or a path to a new file on a terminal that cannot show images. `-o name.png` or `--format png` gives a PNG. The two are the same picture.
 
 <p align="center">
   <img src="docs/quadratic.png" alt="Quadratic formula" width="420"><br>
@@ -18,32 +20,90 @@ On iTerm2 and WezTerm the picture is inline. Kitty draws it with the Kitty graph
 
 ## Ledger
 
-`--legend` keeps the formula white and lists each Greek letter underneath with its English name. The same letter keeps the same color every time. Letters inside the formula stay white. After the Greek, each accent, subscript, and superscript is read aloud once: "ψ hat", "x sub i", "c squared", "∫ from −∞", "∫ to ∞".
+`--legend` colors each Greek letter in the formula and lists it underneath with its English name in the same color. The same letter keeps the same color every time. Named symbols that are not Greek come next: "h bar", "del", "partial", "expectation". After those, each accent, subscript, and superscript is read aloud once: "ψ hat", "x sub i", "c squared", "∫ from −∞", "∫ to ∞".
+
+A mark that is not arithmetic says what it usually means, once, in a dim line under its name. `u^\star` reads "u star", then "A marked u: often the best one, or its complex conjugate. Not a power." The same goes for transpose, dagger, prime, inverse, hat, bar, tilde, and dot. `A_e^\top` reads "A sub e transpose". A subscript that is already a word, as in `N_{\mathrm{dense}}`, gets no row.
 
 ```bash
-mathcat --legend '\psi(x)=\int_{-\infty}^{\infty}\hat{\psi}(\xi)\,e^{2\pi i x \xi}\,d\xi'
+eqlens --legend '\psi(x)=\int_{-\infty}^{\infty}\hat{\psi}(\xi)\,e^{2\pi i x \xi}\,d\xi'
 ```
 
 <p align="center">
-  <img src="docs/legend.png" alt="Formula with a colored ledger for psi, xi, and pi, then the integral limits, psi hat, and the exponent" width="640">
+  <img src="docs/legend.png" alt="A Fourier integral with psi, xi, and pi colored in the formula and named in a ledger, then the integral limits, psi hat, and the exponent" width="640">
 </p>
+
+## What a symbol means here
+
+`--define 'KEY=meaning'` gives a symbol its meaning in this formula. It gets a color, a row, and a tooltip. `KEY` is the TeX of the symbol: `P`, `A_e`, `\epsilon`, `u^\star`.
+
+```bash
+eqlens --legend \
+  --define 'P=keeps the part of the noise the cell can see' \
+  --define 'A_e=squeezes a cell of fine tokens into one' \
+  --define 'u^\star=the target the model is trained on' \
+  'u^\star=P\,\epsilon-x_0,\qquad P=A_eA_e^\top'
+```
+
+<p align="center">
+  <img src="docs/define.png" alt="A formula whose P, A sub e, and u star are colored, with a ledger giving the meaning of each" width="640">
+</p>
+
+## Hover
+
+Open the SVG in a browser, or put it inline in a page. Point at a symbol: every place it appears lights up with its ledger row, the rest dims, and the tooltip says its name and meaning. Point at a ledger row and the formula shows where that symbol is. No script is involved, only CSS inside the SVG.
+
+Inline means the `<svg>` element itself is in the HTML. Inside `<img>` the same file is a still picture, because a browser does not let an image react to the pointer.
+
+```astro
+---
+import eq from '../eq/target.svg?raw'
+---
+<figure set:html={eq} />
+```
+
+An inline SVG takes its colors from the page when the page sets them:
+
+```css
+figure svg { --eq-fg: #1f2328; --eq-bg: #ffffff; --eq-dim: #57606a; --eq-mark: #424a53; }
+```
+
+Each SVG scopes its own ids and styles, so many can share a page.
 
 ## A few flags
 
-`mathcat --help` lists them.
+`eqlens --help` lists them.
 
 | Flag | What it does |
 | --- | --- |
-| `--legend` | English names for Greek, accents, subscripts, and superscripts |
+| `--legend` | Color Greek, and name Greek, accents, subscripts, and superscripts |
+| `--brief` | `--legend` without plain subscripts and powers: only the rows with something to say |
+| `--define 'KEY=meaning'` | Say what a symbol means here. Repeat for more |
 | `--note 'text'` | A short note in fine print under the formula. Repeat for more lines. `$...$` renders as math |
-| `-o file.png` | Write a PNG, print its absolute path, and do not display it |
+| `-o file` | Write a file, print its absolute path, and do not display it. `.png` writes a PNG, anything else an SVG |
+| `--format svg\|png` | Choose the format whatever the file is called |
+| `--font sans\|serif\|stix\|cm` | Typeface. `stix` and `cm` look like a printed paper |
 | `--local` | Render in this process |
-| `--bg '#12141a'` | Opaque background. The default is transparent |
+| `--bg '#12141a'` | Background. A bare formula is transparent by default; a card is dark |
+| `--color '#f2f2f7'` | Color of everything that has no color of its own |
+| `--dpi 220` | PNG resolution |
 
-`mathd` is optional. It serves PNGs on `http://127.0.0.1:8765`. When it is running, `mathcat` uses it.
+`eqlensd` is optional. It serves `/svg` and `/png` on `http://127.0.0.1:8765`. When it is running, `eqlens` uses it.
 
-One formula per call. matplotlib mathtext: fractions, roots, integrals, subscripts, superscripts, `\mathrm`, `\text`, and Greek commands. No `\begin{...}` environments, no preamble, no TikZ.
+One formula per call. matplotlib mathtext: fractions, roots, integrals, sums, subscripts, superscripts, accents, `\mathrm`, `\mathbb`, `\mathcal`, `\text`, and Greek commands. No `\begin{...}` environments, no preamble, no `\color`, no TikZ. [`tests/equations.py`](tests/equations.py) lists some fifty formulas from physics, quantum physics, and machine learning that are drawn in the tests.
+
+## From Python
+
+```python
+from eqlens.render import render_svg, render_png
+
+svg = render_svg(r"e^{i\pi}+1=0", legend=True, define=["e=Euler's number"])
+png = render_png(r"e^{i\pi}+1=0", legend=True, dpi=220)
+```
 
 ## Claude Code
 
-The pane is on the [README](README.md#claude-code). `/mathcat` draws into it. The flags are the same ones in the table above.
+The pane is on the [README](README.md#claude-code). `/eqlens` draws into it. The flags are the same ones in the table above.
+
+## It used to be mathcat
+
+The command was `mathcat` and the server `mathd` before 0.2. Both names still run. `MATHCAT_URL` is still read when `EQLENS_URL` is not set.

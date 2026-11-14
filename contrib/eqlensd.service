@@ -1,10 +1,10 @@
 [Unit]
-Description=mathcat formula renderer
+Description=eqlens formula renderer
 After=default.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/mathd --host 127.0.0.1 --port 8765
+ExecStart=%h/.local/bin/eqlensd --host 127.0.0.1 --port 8765
 Restart=on-failure
 
 [Install]

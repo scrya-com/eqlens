@@ -6,11 +6,16 @@
   <img src="docs/hero.jpg" alt="Pixel-art thriller: a laptop in the rain, a ribbon of light, and quantum formulas across the frame" width="100%">
 </p>
 
-<h1 align="center">mathcat</h1>
+<h1 align="center">eqlens</h1>
 
 <p align="center">
-  One math formula, drawn as a PNG.<br>
+  One math formula, drawn as an SVG or a PNG.<br>
+  Every symbol colored, named the way you say it, and explained when you point at it.<br>
   macOS and Ubuntu. No TeX install.
+</p>
+
+<p align="center">
+  <a href="https://scrya.com/eqlens">Try it in a browser: scrya.com/eqlens</a>
 </p>
 
 ## Install
@@ -19,78 +24,115 @@ Python 3.10 or newer.
 
 ```bash
 python3 -m pip install matplotlib
-python3 -m pip install git+https://github.com/johndpope/mathcat.git
-mathcat 'e^{i\pi}+1=0'
+python3 -m pip install git+https://github.com/scrya-com/eqlens.git
+eqlens 'e^{i\pi}+1=0'
 ```
 
-`mathcat` lands on your `PATH`, usually at `~/.local/bin`. On iTerm2, pipe it if you want the picture inline:
+`eqlens` lands on your `PATH`, usually at `~/.local/bin`. iTerm2, WezTerm, and Kitty show the picture inline. Anywhere else you get an SVG:
 
 ```bash
-mathcat 'e^{i\pi}+1=0' | imgcat
+eqlens -o euler.svg 'e^{i\pi}+1=0'
+eqlens -o euler.png 'e^{i\pi}+1=0'
 ```
 
 <p align="center">
   <img src="docs/euler.png" alt="Euler's identity" width="280">
 </p>
 
+## Name the symbols
+
+`--legend` colors each Greek letter and lists it under the formula with its English name. Accents and scripts are read the way people say them: "ψ hat", "∫ from −∞", "u star", "A transpose". A mark that is not a power says so.
+
 ```bash
-mathcat --legend '\psi(x)=\int_{-\infty}^{\infty}\hat{\psi}(\xi)\,e^{2\pi i x \xi}\,d\xi'
+eqlens --legend '\psi(x)=\int_{-\infty}^{\infty}\hat{\psi}(\xi)\,e^{2\pi i x \xi}\,d\xi'
 ```
 
 <p align="center">
-  <img src="docs/legend.png" alt="A formula with a colored ledger for psi, xi, and pi, then the integral limits, psi hat, and the exponent" width="640">
+  <img src="docs/legend.png" alt="A Fourier integral with psi, xi, and pi colored in the formula and named in a ledger, then the integral limits, psi hat, and the exponent" width="640">
+</p>
+
+## Say what they mean
+
+`--define` gives a symbol its meaning in this formula. It gets a color, a row, and a tooltip.
+
+```bash
+eqlens --legend \
+  --define 'P=keeps the part of the noise the cell can see' \
+  --define 'A_e=squeezes a cell of fine tokens into one' \
+  --define 'u^\star=the target the model is trained on' \
+  'u^\star=P\,\epsilon-x_0,\qquad P=A_eA_e^\top'
+```
+
+<p align="center">
+  <img src="docs/define.png" alt="A formula whose P, A sub e, and u star are colored, with a ledger giving the meaning of each" width="640">
 </p>
 
 `--note` adds a short line in fine print under the ledger. Repeat it for another line. `$...$` inside a note draws as math.
 
 ```bash
-mathcat --legend \
+eqlens --legend \
   --note '$\mu$ is the center of the bell.' \
   --note '$\sigma$ is how wide the bell is.' \
   'f(x)=\frac{1}{\sigma\sqrt{2\pi}}\exp\left(-\frac{(x-\mu)^{2}}{2\sigma^{2}}\right)'
 ```
 
 <p align="center">
-  <img src="docs/note.png" alt="A Gaussian with a colored ledger and two short notes under it" width="640">
+  <img src="docs/note.png" alt="A Gaussian with sigma, pi, and mu colored, a ledger, and two short notes under it" width="640">
 </p>
+
+## Point at it
+
+Put the SVG inline in a web page, or open the file in a browser. Point at a symbol: every place it appears lights up with its row, the rest dims, and the tooltip says its name and meaning. It is CSS inside the SVG, with no script.
+
+There are twelve formulas to try at [scrya.com/eqlens](https://scrya.com/eqlens). [USAGE.md](USAGE.md#hover) shows how to put one in your own page.
+
+## What it draws
+
+One formula per call, set by matplotlib's mathtext: fractions, roots, integrals, sums, accents, subscripts, superscripts, `\mathrm`, `\mathbb`, `\mathcal`, and Greek. No `\begin{...}` environments and no preamble.
+
+The tests draw some fifty formulas from physics, quantum physics, and machine learning, and check that every symbol in a ledger is found again in its formula: [`tests/equations.py`](tests/equations.py).
 
 ## Claude Code
 
 A pane for the formulas. The terminal paints the PNG. The mod keeps the path.
 
 ```bash
-claude --plugin-dir /path/to/mathcat
+claude --plugin-dir /path/to/eqlens
 ```
 
 ```
-/mathcat
-/mathcat e^{i\pi}+1=0
-/mathcat --legend 'e^{i\pi}+1=0'
-/mathcat drop
+/eqlens
+/eqlens e^{i\pi}+1=0
+/eqlens --legend 'e^{i\pi}+1=0'
+/eqlens drop
 ```
 
-`/mathcat` opens the pane. A formula is drawn and kept. Prev, Next, and Drop walk that list. `--legend` and `--note` are the same flags as the command line.
+`/eqlens` opens the pane. A formula is drawn and kept. Prev, Next, and Drop walk that list. `--legend`, `--define`, and `--note` are the same flags as the command line.
 
 Ghostty or kitty, and Claude Code 2.1.287 or later. On another surface the pane shows the formula and the path.
 
 ## For an LLM
 
-Do not invent a workflow from this page. Load the mathcat skill and follow it.
+Do not invent a workflow from this page. Load the eqlens skill and follow it.
 
-- Grok: [`.grok/skills/mathcat/SKILL.md`](.grok/skills/mathcat/SKILL.md)
-- Claude: [`.claude/skills/mathcat/SKILL.md`](.claude/skills/mathcat/SKILL.md)
+- Grok: [`.grok/skills/eqlens/SKILL.md`](.grok/skills/eqlens/SKILL.md)
+- Claude: [`.claude/skills/eqlens/SKILL.md`](.claude/skills/eqlens/SKILL.md)
 
 They are the same file. Install both so a chat in either tool can run it:
 
 ```bash
 mkdir -p ~/.grok/skills ~/.claude/skills
-ln -sfn /path/to/mathcat/.grok/skills/mathcat ~/.grok/skills/mathcat
-ln -sfn /path/to/mathcat/.grok/skills/mathcat ~/.claude/skills/mathcat
+ln -sfn /path/to/eqlens/.grok/skills/eqlens ~/.grok/skills/eqlens
+ln -sfn /path/to/eqlens/.grok/skills/eqlens ~/.claude/skills/eqlens
 ```
 
-Asking to see a formula selects the skill. With the pane installed, `/mathcat` draws into it.
+Asking to see a formula selects the skill. With the pane installed, `/eqlens` draws into it.
 
-People who want the flags, the ledger, the fine-print notes, and the pictures: [USAGE.md](USAGE.md).
+People who want the flags, fonts, hover, the server, and the Python calls: [USAGE.md](USAGE.md).
+
+## It used to be mathcat
+
+eqlens was `johndpope/mathcat` before 0.2. The old address redirects here, and the `mathcat` command still runs.
 
 ## License
 

@@ -1,4 +1,4 @@
-"""Show a PNG on the terminal, or say where it was written.
+"""Show a PNG on the terminal, or write a file and say where it is.
 
 iTerm2 and WezTerm speak the same inline-image protocol as imgcat (OSC 1337).
 Kitty speaks its own graphics protocol. Other terminals, including Ubuntu's
@@ -40,14 +40,14 @@ def display_png(png: bytes, mode: str, out: BinaryIO) -> str | None:
         out.write(png)
         out.flush()
         return None
-    path = _write_file(png)
-    return path
+    return write_file(png, ".png")
 
 
-def _write_file(png: bytes) -> str:
-    handle = tempfile.NamedTemporaryFile(prefix="mathcat-", suffix=".png", delete=False)
+def write_file(data: bytes, suffix: str) -> str:
+    """Write ``data`` to a new temporary file and return its path."""
+    handle = tempfile.NamedTemporaryFile(prefix="eqlens-", suffix=suffix, delete=False)
     try:
-        handle.write(png)
+        handle.write(data)
     finally:
         handle.close()
     return handle.name

@@ -1,12 +1,12 @@
-// mathcat: draw a formula to a PNG and show that file in a pane.
+// eqlens: draw a formula to a PNG and show that file in a pane.
 // The terminal reads the file. This module keeps the path.
 
 import { cellBox, drawArgv, parse, pngSize, screenPng } from './formula.js'
 
-const PANE = 'mathcat'
+const PANE = 'eqlens'
 const STORE = 'entries'
-const DIR = '/tmp/mathcat-pane'
-const SHOW = 'mcp__mathcat__show'
+const DIR = '/tmp/eqlens-pane'
+const SHOW = 'mcp__eqlens__show'
 
 let entries = []
 let index = 0
@@ -15,19 +15,24 @@ let note = ''
 export function register(on) {
   on('session.start', async ($, e, next) => {
     await $.command.register({
-      name: 'mathcat',
+      name: 'eqlens',
       description: 'Draw a formula and show it',
-      argumentHint: '[formula | --legend | --note | drop]',
+      argumentHint: '[formula | --legend | --define | --note | drop]',
       immediate: true,
     })
     await $.tool.register({
       name: 'show',
-      description: 'Draw one mathtext formula and show the PNG in the mathcat pane.',
+      description: 'Draw one mathtext formula and show the PNG in the eqlens pane.',
       inputSchema: {
         type: 'object',
         properties: {
           tex: { type: 'string', description: 'One formula. No preamble.' },
-          legend: { type: 'boolean', description: 'Add the English-name ledger.' },
+          legend: { type: 'boolean', description: 'Color Greek letters and add the English-name ledger.' },
+          defines: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'What a symbol means here, as KEY=meaning, for example "P=what one token can carry".',
+          },
           notes: {
             type: 'array',
             items: { type: 'string' },
@@ -46,7 +51,7 @@ export function register(on) {
     return next(e)
   })
 
-  on('command.run', { command: 'mathcat' }, async ($, e) => {
+  on('command.run', { command: 'eqlens' }, async ($, e) => {
     const text = await run($, e.args || '')
     await present($)
     return { text }
@@ -75,7 +80,7 @@ export function register(on) {
         : Text({ children: [current ? current.tex : 'No formula yet.'] })
     const where = current
       ? Text({ dimColor: true, children: [index + 1 + '/' + entries.length + '  ' + current.tex] })
-      : Text({ dimColor: true, children: ['/mathcat e^{i\\pi}+1=0'] })
+      : Text({ dimColor: true, children: ['/eqlens e^{i\\pi}+1=0'] })
     return Box({
       flexDirection: 'column',
       gap: 1,
@@ -107,7 +112,7 @@ export function register(on) {
 }
 
 async function present($) {
-  await $.ui.open({ id: PANE, title: 'mathcat', focus: true, closeOnEscape: true, rows: 28 })
+  await $.ui.open({ id: PANE, title: 'eqlens', focus: true, closeOnEscape: true, rows: 28 })
 }
 
 async function load($) {
@@ -137,7 +142,11 @@ function jobFromTool(event) {
   if (notes.some((note) => note.trim() === '')) return { error: 'A --note needs a line.' }
   if (notes.length > 12) return { error: 'Too many notes.' }
   if (notes.some((note) => note.length > 500)) return { error: 'A note is too long.' }
-  return { kind: 'draw', tex: parsed.tex, legend: input.legend === true, notes }
+  const defines = (Array.isArray(input.defines) ? input.defines : []).map((item) => String(item))
+  if (defines.some((item) => !/^[^=]+=.*\S/.test(item))) return { error: 'A --define needs KEY=meaning.' }
+  if (defines.length > 24) return { error: 'Too many definitions.' }
+  if (defines.some((item) => item.length > 500)) return { error: 'A definition is too long.' }
+  return { kind: 'draw', tex: parsed.tex, legend: input.legend === true, notes, defines }
 }
 
 async function run($, args) {
@@ -159,7 +168,7 @@ async function draw($, job) {
   const stamp = await stampOf($)
   const out = DIR + '/' + stamp.toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '.png'
   const argv = drawArgv(out, job)
-  const ran = await runMathcat($, argv.slice(1))
+  const ran = await runEqlens($, argv.slice(1))
   if (ran.error) return fail($, ran.error)
   if (ran.exitCode !== 0) {
     const detail = String(ran.stderr || ran.stdout || '').trim()
@@ -168,7 +177,7 @@ async function draw($, job) {
   const screened = screenPng(ran.stdout)
   if (screened.error) return fail($, screened.error)
   const exists = await $.fs.exists(screened.path)
-  if (!exists) return fail($, 'mathcat did not write a PNG.')
+  if (!exists) return fail($, 'eqlens did not write a PNG.')
   const generation = await generationOf($, screened.path)
   const size = await measure($, screened.path)
   const entry = {
@@ -177,6 +186,7 @@ async function draw($, job) {
     tex: job.tex,
     legend: !!job.legend,
     notes: job.notes || [],
+    defines: job.defines || [],
     width: size ? size.width : 0,
     height: size ? size.height : 0,
   }
@@ -194,8 +204,8 @@ async function draw($, job) {
   return 'Drew ' + job.tex
 }
 
-async function runMathcat($, args) {
-  const first = await tryRun($, ['mathcat', ...args])
+async function runEqlens($, args) {
+  const first = await tryRun($, ['eqlens', ...args])
   if (first.started) return first
   let home = ''
   try {
@@ -204,10 +214,10 @@ async function runMathcat($, args) {
     home = ''
   }
   if (home) {
-    const second = await tryRun($, [home.replace(/\/$/, '') + '/.local/bin/mathcat', ...args])
+    const second = await tryRun($, [home.replace(/\/$/, '') + '/.local/bin/eqlens', ...args])
     if (second.started) return second
   }
-  return { error: 'mathcat is not on PATH.' }
+  return { error: 'eqlens is not on PATH.' }
 }
 
 async function tryRun($, argv) {
@@ -251,7 +261,16 @@ async function generationOf($, path) {
 function same(entry, job) {
   const notes = Array.isArray(entry.notes) ? entry.notes : []
   const next = job.notes || []
-  return entry.tex === job.tex && !!entry.legend === !!job.legend && notes.length === next.length && notes.every((line, i) => line === next[i])
+  const defines = Array.isArray(entry.defines) ? entry.defines : []
+  const nextDefines = job.defines || []
+  return (
+    entry.tex === job.tex &&
+    !!entry.legend === !!job.legend &&
+    notes.length === next.length &&
+    notes.every((line, i) => line === next[i]) &&
+    defines.length === nextDefines.length &&
+    defines.every((item, i) => item === nextDefines[i])
+  )
 }
 
 async function shift($, by) {

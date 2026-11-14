@@ -1,20 +1,23 @@
 [project]
-name = "mathcat"
-version = "0.1.0"
-description = "Local service that renders math formulas to PNG for iTerm2, WezTerm, Kitty, and Ubuntu."
+name = "eqlens"
+version = "0.2.0"
+description = "Draw a math formula as SVG or PNG, with colored symbols, a ledger that says how to read them, and hover tips."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE.md" }
 authors = [{ name = "John D. Pope" }]
-keywords = ["math", "latex", "iterm2", "imgcat", "terminal"]
+keywords = ["math", "latex", "svg", "formula", "terminal", "imgcat"]
 dependencies = ["matplotlib"]
 
 [project.urls]
-Homepage = "https://github.com/johndpope/mathcat"
+Homepage = "https://github.com/scrya-com/eqlens"
 
 [project.scripts]
-mathcat = "mathcat.cli:main"
-mathd = "mathcat.server:main"
+eqlens = "eqlens.cli:main"
+eqlensd = "eqlens.server:main"
+# The names before 0.2, kept so old scripts still run.
+mathcat = "eqlens.cli:main"
+mathd = "eqlens.server:main"
 
 [build-system]
 requires = ["setuptools>=61"]
