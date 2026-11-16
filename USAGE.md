@@ -79,6 +79,26 @@ eqlens --brief --tier 'P=A_eA_e^\top' -o recover.html 'v=P\,u_a+\frac{(I-P)\,(x_
 
 The fragment carries its own style and one short script. The SVG and PNG have no script in them. In an SVG or PNG the tiers are always open.
 
+## Shader: GLSL for WebGL2 and Shadertoy
+
+Name the output `.glsl` or `.frag`, or pass `--format glsl`, to get a fragment shader that draws the formula on the GPU. It is the same picture as the PNG, ledger and notes included, and it stays sharp at any size: every glyph outline is in the shader as line segments, and each pixel works out how far it is from the nearest edge. Nothing is loaded from a texture or a font.
+
+```bash
+eqlens --legend -o euler.frag 'e^{i\pi}+1=0'
+eqlens --format glsl 'E=mc^2' > emc2.glsl
+```
+
+The file is a whole WebGL2 (GLSL ES 3.00) fragment shader. Draw a full-screen triangle and set two uniforms, named the way Shadertoy names them:
+
+- `iResolution`, a `vec3`: the canvas size in pixels.
+- `iMouse`, a `vec4`: the pointer in pixels from the bottom left. Pointing at a symbol lights it, its other appearances, and its row, and dims the rest, as hovering does in the SVG. `(0, 0)` means no pointer.
+
+The formula is fitted to the canvas and centered. A card has its opaque background; a bare formula is transparent, and the color comes out premultiplied, as a WebGL canvas expects.
+
+For Shadertoy, paste only the part between the lines `// ---- Shadertoy: paste from here ----` and `// ---- Shadertoy: paste to here ----`. It has a `mainImage` and no `#version` or uniforms of its own. Shadertoy only moves `iMouse` while the button is down, so there you click and drag to light a symbol.
+
+A bare formula is about 10 KB of shader; a card with a ledger is 50 to 120 KB. The `--tips`, `--no-credit`, and `--dpi` flags change nothing in a shader, and it has no mark in the corner. `eqlensd` serves the same thing at `/glsl`.
+
 ## The mark in the corner
 
 An SVG card has a small mark in its bottom right corner that links to [scrya.com/eqlens](https://scrya.com/eqlens). It is inside the SVG as data, so a drawing fetches nothing. `--no-credit` leaves it off. A bare formula with no card, and a PNG, have none.

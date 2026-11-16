@@ -19,7 +19,7 @@ from eqlens.display import display_png
 from eqlens.engine import layout
 from eqlens.introspect import IntrospectError, inspect, introspect
 from eqlens.legend import MAX_TIERS, greek_in, hints_in, named_in, notation_in, occurrences, plain, plan, symbols
-from eqlens.render import FormulaError, render_html, render_png, render_svg
+from eqlens.render import FormulaError, render_glsl, render_html, render_png, render_svg
 from eqlens.server import Handler
 
 
@@ -578,6 +578,60 @@ class HtmlTests(unittest.TestCase):
         finally:
             if os.path.exists(path):
                 os.remove(path)
+
+
+class GlslTests(unittest.TestCase):
+    TEX = SymbolTests.TEX
+
+    def test_a_shader_is_webgl2_with_a_shadertoy_main_inside(self):
+        source = render_glsl(r"e^{i\pi}+1=0")
+        self.assertTrue(source.startswith("#version 300 es\n"))
+        inner = source.split("// ---- Shadertoy: paste from here ----")[1].split("// ---- Shadertoy: paste to here ----")[0]
+        self.assertIn("void mainImage(out vec4 fragColor, in vec2 fragCoord)", inner)
+        self.assertNotIn("#version", inner)
+        self.assertNotIn("uniform", inner)
+        self.assertIn("mainImage(eqlensColor, gl_FragCoord.xy)", source)
+
+    def test_array_sizes_match_their_entries(self):
+        source = render_glsl(self.TEX, legend=True, define=["P=what one token can carry"], notes=["fine print"])
+        for kind, name, size, body in re.findall(r"const (\w+) (\w+)\[(\d+)\] = \w+\[\]\(\n(.*?)\n\);", source, re.S):
+            with self.subTest(name):
+                self.assertEqual(int(size), body.count(f"{kind}("))
+        self.assertIn("const int RULES = 0;", render_glsl("x"))
+        self.assertIn("RULE[1] = vec4[](\n  vec4(0)", render_glsl("x"))
+
+    def test_the_shader_draws_the_same_scene_as_the_svg(self):
+        svg = render_svg(self.TEX, legend=True, credit=False)
+        source = render_glsl(self.TEX, legend=True)
+        marks = int(re.search(r"const int MARKS = (\d+);", source).group(1))
+        self.assertEqual(marks, svg.count("<use "))
+        width, height = (float(v) for v in re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg).group(1, 2))
+        scene = re.search(r"SCENE = vec2\(([\d.]+), ([\d.]+)\)", source)
+        self.assertAlmostEqual(float(scene.group(1)), width, places=1)
+        self.assertAlmostEqual(float(scene.group(2)), height, places=1)
+
+    def test_a_symbol_and_its_row_share_a_hover_bit(self):
+        source = render_glsl(self.TEX, define=["P=what one token can carry"])
+        # P: two glyphs in the formula and one row carry bit 0, and dim with the rest.
+        self.assertEqual(source.count("uvec2(1u, 1u)"), 3)
+
+    def test_colors_and_background(self):
+        source = render_glsl("x", color="#ff0000")
+        self.assertIn("vec3(1., 0., 0.)", source)
+        self.assertIn("UNDER = vec4(0.)", source)
+        self.assertIn("UNDER = vec4(0.071, 0.078, 0.102, 1.)", render_glsl("x", notes=["a card"]))
+
+    def test_the_command_line_picks_glsl_from_the_name(self):
+        for suffix in (".glsl", ".frag"):
+            path = self.id().replace(".", "_") + suffix
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(main(["--local", "-o", path, r"E=mc^2"]), 0)
+                with open(path, encoding="utf-8") as handle:
+                    self.assertTrue(handle.read().startswith("#version 300 es"))
+            finally:
+                if os.path.exists(path):
+                    os.remove(path)
 
 
 class _Block:

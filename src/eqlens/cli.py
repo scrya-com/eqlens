@@ -28,8 +28,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-o", "--output", help="write to this path instead of displaying. .png writes a PNG, anything else an SVG")
     parser.add_argument(
         "--format",
-        choices=["svg", "png", "html"],
-        help="svg (default), png, or html: the SVG in a fragment with Copy and Expand buttons. Overrides the -o extension",
+        choices=["svg", "png", "html", "glsl"],
+        help="svg (default), png, html: the SVG in a fragment with Copy and Expand buttons, or glsl: a WebGL2 "
+        "fragment shader that draws the formula, with a Shadertoy mainImage inside. Overrides the -o extension "
+        "(.glsl and .frag pick glsl)",
     )
     parser.add_argument(
         "--url",
@@ -131,12 +133,23 @@ def main(argv: list[str] | None = None) -> int:
         mode = "file"
     elif mode == "auto":
         mode = detect_display() if sys.stdout.isatty() else "stdout"
+    # A shader is source code: a terminal shows it as text, not as a picture.
+    if args.format == "glsl" and mode in ("iterm", "kitty"):
+        mode = "stdout"
     # A terminal paints pixels, so inline display is always PNG.
     if mode in ("iterm", "kitty"):
         fmt = "png"
     else:
         name = (args.output or "").lower()
-        fmt = args.format or ("png" if name.endswith(".png") else "html" if name.endswith((".html", ".htm")) else "svg")
+        fmt = args.format or (
+            "png"
+            if name.endswith(".png")
+            else "html"
+            if name.endswith((".html", ".htm"))
+            else "glsl"
+            if name.endswith((".glsl", ".frag"))
+            else "svg"
+        )
 
     try:
         if args.symbols:

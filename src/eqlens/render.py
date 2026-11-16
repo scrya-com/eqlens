@@ -21,8 +21,9 @@ from eqlens.constants import defines as constant_defines
 from eqlens.credit import LOGO_PNG_BASE64, SIZE, URL
 from eqlens.engine import FONTS, FormulaError, Group, Run, Scene, box, has_ink, layout, parses, place, to_png, to_svg
 from eqlens.legend import Block, Symbol, occurrences, plan
+from eqlens.shader import to_glsl
 
-__all__ = ["FormulaError", "normalize_tex", "render", "render_html", "render_png", "render_svg"]
+__all__ = ["FormulaError", "normalize_tex", "render", "render_glsl", "render_html", "render_png", "render_svg"]
 
 _COLOR = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _MAX_TEX = 8000
@@ -64,6 +65,11 @@ def render_html(tex: str, **options) -> str:
     return render(tex, "html", **options).decode("utf-8")
 
 
+def render_glsl(tex: str, **options) -> str:
+    """Return a WebGL2 fragment shader that draws the formula, with a Shadertoy ``mainImage`` inside."""
+    return render(tex, "glsl", **options).decode("utf-8")
+
+
 def render_png(tex: str, **options) -> bytes:
     """Return a PNG. See ``render`` for the options."""
     return render(tex, "png", **options)
@@ -89,7 +95,11 @@ def render(
     shared: Sequence[str] = (),
     _disclose: str | None = None,
 ) -> bytes:
-    """Draw ``tex`` as ``svg``, ``png``, or ``html`` bytes.
+    """Draw ``tex`` as ``svg``, ``png``, ``html``, or ``glsl`` bytes.
+
+    ``glsl`` is a WebGL2 fragment shader that carries the glyph outlines and
+    draws the same picture as the PNG, sharp at any size. Pointing at a symbol
+    (``iMouse``) lights it as in the SVG. Its ``mainImage`` pastes into Shadertoy.
 
     ``html`` is a fragment to put in a page: the SVG under a small bar with a
     Copy button (the TeX goes to the clipboard) and, when there are tiers, an
@@ -114,8 +124,8 @@ def render(
     where its symbol appears, and ``define`` wins for the same symbol. ``font`` is one of ``sans``, ``serif``,
     ``stix``, ``cm``. ``dpi`` only matters for PNG.
     """
-    if fmt not in ("svg", "png", "html"):
-        raise FormulaError("format must be svg, png, or html")
+    if fmt not in ("svg", "png", "html", "glsl"):
+        raise FormulaError("format must be svg, png, html, or glsl")
     if not isinstance(dpi, int) or isinstance(dpi, bool) or not 72 <= dpi <= 600:
         raise FormulaError("dpi must be an integer from 72 to 600")
     if font not in FONTS:
@@ -153,6 +163,8 @@ def render(
     scene = _scene(formula, top, rows, notes, font, card, _disclose)
     if fmt == "png":
         return to_png(scene, dpi=dpi, fg=color, bg=bg)
+    if fmt == "glsl":
+        return to_glsl(scene, label=text[1:-1].strip(), fg=color, bg=bg).encode("utf-8")
     mark = None
     if card and credit:
         # Room under the last line, then the mark in the corner.

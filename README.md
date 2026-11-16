@@ -97,6 +97,16 @@ eqlens --brief \
 
 An `.html` output is a fragment for a web page with two buttons: **Expand** opens the tiers, and **Copy** puts the TeX on the clipboard.
 
+## Or draw it with a shader
+
+Name the output `.glsl` or `.frag`, or pass `--format glsl`, for a WebGL2 fragment shader that draws the formula, ledger and all, sharp at any size. Pointing at a symbol (`iMouse`) lights it as in the SVG, and the `mainImage` inside pastes straight into Shadertoy.
+
+```bash
+eqlens --legend -o euler.frag 'e^{i\pi}+1=0'
+```
+
+[USAGE.md](USAGE.md#shader-glsl-for-webgl2-and-shadertoy) says how to run it.
+
 ## Or let Claude say it
 
 `--introspect` asks Claude what the parts of the formula stand for and draws them for you. It needs `pip install 'eqlens[ai]'` and an `ANTHROPIC_API_KEY`.

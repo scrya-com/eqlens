@@ -3,6 +3,7 @@
 GET  /health
 GET  /svg?tex=...&color=%23f2f2f7&bg=transparent&legend=1&note=...&define=P%3Dmeaning
 GET  /png?tex=...&dpi=220
+GET  /glsl?tex=...   a WebGL2 fragment shader that draws the formula
 POST /svg    {"tex": "...", "legend": true, "notes": ["..."], "define": ["P=meaning"], "font": "sans"}
 POST /png    {"tex": "...", "dpi": 220, "color": "#f2f2f7", "bg": null}
 
@@ -23,6 +24,7 @@ _TYPES = {
     "/svg": ("svg", "image/svg+xml"),
     "/png": ("png", "image/png"),
     "/html": ("html", "text/html; charset=utf-8"),
+    "/glsl": ("glsl", "text/plain; charset=utf-8"),
 }
 
 
