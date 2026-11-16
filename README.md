@@ -105,7 +105,7 @@ Name the output `.glsl` or `.frag`, or pass `--format glsl`, for a WebGL2 fragme
 eqlens --legend -o euler.frag 'e^{i\pi}+1=0'
 ```
 
-[USAGE.md](USAGE.md#shader-glsl-for-webgl2-and-shadertoy) says how to run it.
+[See it running](https://claude.ai/artifact/Q6151o5gGRHZBegqGHh2sV): the equations of the TokenStream paper, each drawn by its own shader. [USAGE.md](USAGE.md#shader-glsl-for-webgl2-and-shadertoy) says how to run it.
 
 ## Or let Claude say it
 

@@ -88,6 +88,8 @@ eqlens --legend -o euler.frag 'e^{i\pi}+1=0'
 eqlens --format glsl 'E=mc^2' > emc2.glsl
 ```
 
+[The demo page](https://claude.ai/artifact/Q6151o5gGRHZBegqGHh2sV) draws the five equations of the TokenStream paper ([arXiv 2611.16897](https://arxiv.org/abs/2611.16897)) this way, with hover, zoom, and Copy for Shadertoy.
+
 The file is a whole WebGL2 (GLSL ES 3.00) fragment shader. Draw a full-screen triangle and set two uniforms, named the way Shadertoy names them:
 
 - `iResolution`, a `vec3`: the canvas size in pixels.
