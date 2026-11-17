@@ -113,6 +113,11 @@ def main(argv: list[str] | None = None) -> int:
         "meanings as --define items, so they can be kept and drawn again without asking",
     )
     parser.add_argument(
+        "--read",
+        action="store_true",
+        help="print the whole formula in words, the way it is said aloud, and draw nothing",
+    )
+    parser.add_argument(
         "--note",
         action="append",
         default=[],
@@ -127,6 +132,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("give a formula")
     tex = " ".join(args.tex).strip()
     args.shared = []
+    if args.read:
+        from eqlens.speech import read
+
+        print(read(tex))
+        return 0
 
     mode = args.display
     if args.output:

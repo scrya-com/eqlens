@@ -381,6 +381,9 @@ def _script_name(base: str, command: str | None, mark: str, arg: str) -> tuple[s
     if arg in _POWERS and not (arg in ("T", "H") and base.isdigit()):
         suffix, hint = _POWERS[arg]
         return f"${base}$ {suffix}", suffix, hint.format(b=base)
+    if "," in arg:
+        # A list of labels, as in Q^{t,l} for step t and layer l: not a power.
+        return f"${base}$ superscript ${arg}$", "label", ""
     return f"${base}$ to the ${arg}$", "power", ""
 
 

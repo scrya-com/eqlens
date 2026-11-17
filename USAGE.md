@@ -66,12 +66,15 @@ A symbol is one thing in every tier: the same color, listed once under the first
 
 `eqlens --inspect` with the same `--tier` flags prints the whole tree as JSON, so you can see what the next level holds before you write it.
 
-## Buttons: Expand and Copy
+## Buttons: Read, Expand, and Copy
 
-Name the output `.html`, or pass `--format html`, to get a fragment for a web page: the SVG under a small bar with two buttons.
+Name the output `.html`, or pass `--format html`, to get a fragment for a web page: the SVG under a small bar of glyph buttons. Each one has no words on it; its name is in its tooltip and its `aria-label`.
 
-- **Copy** puts the formula's TeX on the clipboard.
-- **Expand** is there when the formula has tiers. The drawing starts with them shut and Expand opens them; Collapse shuts them again.
+- **Read** (a speech bubble) opens the whole formula in words, the way it is said aloud: "L equals the squared L2 norm of (1 minus M) elementwise times (v hat l minus v l), over the L1 norm of (1 minus M), plus …". It opens above the drawing, or below it when there is no room above, and never on top of it, so the page does not grow and the formula stays in view. Its speaker button reads it aloud with the browser's own voice. Escape or a click elsewhere closes it.
+- **Expand** (two arrows) is there when the formula has tiers. The drawing starts with them shut and Expand opens them; Collapse shuts them again.
+- **Copy** (two sheets) puts the formula's TeX on the clipboard, and shows a tick when it has.
+
+The same reading is in every SVG as its `<desc>`, for screen readers, and at the top of a shader as a comment. `eqlens --read '<tex>'` prints it and draws nothing. In it a fraction bar is "over", `\|x\|_1` is "the L1 norm of x", `\odot` is "elementwise times", a one-letter label such as the layer in `v^l` is "v l" and not "v to the l", and a part that is more than one term keeps brackets so the reading says where it ends.
 
 ```bash
 eqlens --brief --tier 'P=A_eA_e^\top' -o recover.html 'v=P\,u_a+\frac{(I-P)\,(x_t+u_a)}{\sigma}'

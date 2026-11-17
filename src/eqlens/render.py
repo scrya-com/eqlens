@@ -22,6 +22,7 @@ from eqlens.credit import LOGO_PNG_BASE64, SIZE, URL
 from eqlens.engine import FONTS, FormulaError, Group, Run, Scene, box, has_ink, layout, parses, place, to_png, to_svg
 from eqlens.legend import Block, Symbol, occurrences, plan
 from eqlens.shader import to_glsl
+from eqlens.speech import read, say
 
 __all__ = ["FormulaError", "normalize_tex", "render", "render_glsl", "render_html", "render_png", "render_svg"]
 
@@ -164,7 +165,7 @@ def render(
     if fmt == "png":
         return to_png(scene, dpi=dpi, fg=color, bg=bg)
     if fmt == "glsl":
-        return to_glsl(scene, label=text[1:-1].strip(), fg=color, bg=bg).encode("utf-8")
+        return to_glsl(scene, label=text[1:-1].strip(), fg=color, bg=bg, words=say(text[1:-1])).encode("utf-8")
     mark = None
     if card and credit:
         # Room under the last line, then the mark in the corner.
@@ -172,33 +173,101 @@ def render(
         mark = (scene.width - SIZE - 8.0, scene.height - SIZE - 8.0, SIZE, URL, LOGO_PNG_BASE64)
     seed = json.dumps([text, legend, brief, notes, define, shared, tier, color, bg, font, tips, credit, bool(known), _disclose])
     uid = "eq" + hashlib.sha1(seed.encode("utf-8")).hexdigest()[:8]
-    return to_svg(scene, uid=uid, label=text[1:-1].strip(), fg=color, bg=bg, tips=tips, credit=mark).encode("utf-8")
+    words = say(text[1:-1])
+    return to_svg(scene, uid=uid, label=text[1:-1].strip(), fg=color, bg=bg, tips=tips, credit=mark, desc=words).encode("utf-8")
 
+
+def _icon(name: str, body: str) -> str:
+    return (
+        f'<svg class="eqlens-i {name}" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" '
+        f'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">{body}</svg>'
+    )
+
+
+# Small glyphs for the buttons. Each button keeps its words in aria-label and title.
+_ICONS = {
+    "copy": _icon("i-copy", '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/>'),
+    "done": _icon("i-done", '<path d="M3 8.5l3.2 3L13 4.5"/>'),
+    "expand": _icon("i-expand", '<path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5L9 7M2.5 13.5L7 9"/>'),
+    "collapse": _icon("i-collapse", '<path d="M13 7H9V3M3 9h4v4M9 7l4.5-4.5M7 9l-4.5 4.5"/>'),
+    "read": _icon("i-read", '<path d="M2.5 3.5h11a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H7l-3 2.5v-2.5H2.5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/><path d="M4.5 6.5h7M4.5 8.5h4.5"/>'),
+    "say": _icon("i-say", '<path d="M2.5 6v4h2.5l3.5 3V3L5 6z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.5a6 6 0 0 1 0 9"/>'),
+    "stop": _icon("i-stop", '<rect x="4" y="4" width="8" height="8" rx="1"/>'),
+    "close": _icon("i-close", '<path d="M4 4l8 8M12 4l-8 8"/>'),
+}
 
 _STYLE = (
     ".eqlens{margin:0}"
-    ".eqlens-bar{display:flex;justify-content:flex-end;gap:6px;margin:0 0 6px}"
-    ".eqlens-bar button{font:500 12px/1 system-ui,sans-serif;color:var(--eq-dim,#8b949e);background:transparent;"
-    "border:1px solid currentColor;border-radius:6px;padding:5px 9px;cursor:pointer;opacity:.75}"
-    ".eqlens-bar button:hover,.eqlens-bar button:focus-visible{opacity:1;color:var(--eq-fg,#f2f2f7)}"
-    ".eqlens svg{max-width:100%;height:auto}"
+    ".eqlens-bar{display:flex;justify-content:flex-end;gap:4px;margin:0 0 6px}"
+    ".eqlens button{display:inline-grid;place-items:center;width:28px;height:28px;padding:0;color:var(--eq-dim,#8b949e);"
+    "background:transparent;border:1px solid transparent;border-radius:6px;cursor:pointer;opacity:.8}"
+    ".eqlens button:hover,.eqlens button:focus-visible{opacity:1;color:var(--eq-fg,#f2f2f7);border-color:currentColor}"
+    ".eqlens button:focus-visible{outline:2px solid currentColor;outline-offset:1px}"
+    ".eqlens .eqlens-i{display:block}"
+    # Each button swaps one glyph for another to show its state.
+    ".eqlens .i-done,.eqlens .done .i-copy,.eqlens .i-collapse,.eqlens [aria-expanded=true] .i-expand,"
+    ".eqlens .i-stop,.eqlens .on .i-say{display:none}"
+    ".eqlens .done .i-done,.eqlens [aria-expanded=true] .i-collapse,.eqlens .on .i-stop{display:block}"
+    ".eqlens svg:not(.eqlens-i){max-width:100%;height:auto}"
     ".eqlens [hidden]{display:none}"
+    # The reading opens beside the drawing, never over it. The script sets where.
+    ".eqlens-said{display:none;position:fixed;inset:auto;margin:0;box-sizing:border-box;overflow:auto;"
+    "padding:12px 14px;border:1px solid var(--eq-dim,#8b949e);border-radius:8px;background:var(--eq-bg,#12141a);"
+    "color:var(--eq-fg,#f2f2f7);font:14px/1.55 system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.35);visibility:hidden}"
+    ".eqlens-said.on{display:block}"
+    ".eqlens-said.placed{visibility:visible}"
+    ".eqlens-words{margin:0;white-space:pre-line}"
+    ".eqlens-said-bar{display:flex;justify-content:flex-end;gap:4px;margin:8px -6px -6px 0}"
 )
+# A separate rule: a browser that does not know :popover-open drops only this one.
+_STYLE_OPEN = ".eqlens-said:popover-open{display:block}"
 # One listener for every eqlens figure on the page, however many fragments carry this script.
 _SCRIPT = (
     "(function(){if(window.__eqlens)return;window.__eqlens=1;"
+    "var native=HTMLElement.prototype.hasOwnProperty('popover');"
+    "function label(b,t){b.setAttribute('aria-label',t);b.title=t}"
+    # Put the reading above the figure, or below it when there is no room above.
+    "function place(p){var f=p.closest('.eqlens'),r=f.getBoundingClientRect(),W=innerWidth,H=innerHeight,"
+    "w=Math.min(Math.max(r.width,260),W-16);p.style.width=w+'px';"
+    "p.style.left=Math.max(8,Math.min(r.left,W-w-8))+'px';p.style.maxHeight='';"
+    "var h=p.offsetHeight,up=r.top-8,down=H-r.bottom-8,top;"
+    "if(h<=up||up>=down){top=Math.max(8,r.top-8-h);p.style.maxHeight=Math.max(up-8,80)+'px'}"
+    "else{top=r.bottom+8;p.style.maxHeight=Math.max(down-8,80)+'px'}"
+    "p.style.top=Math.max(8,top)+'px';p.classList.add('placed')}"
+    "function hush(p){var S=window.speechSynthesis;if(S&&(S.speaking||S.pending))S.cancel();"
+    "var s=p.querySelector('.eqlens-say');if(s){s.classList.remove('on');label(s,'Read aloud')}}"
+    "function shut(p){p.classList.remove('placed','on');hush(p)}"
+    "document.addEventListener('toggle',function(e){var p=e.target;"
+    "if(!p.classList||!p.classList.contains('eqlens-said'))return;"
+    "if(e.newState==='open')place(p);else shut(p)},true);"
+    "function again(){var o=document.querySelectorAll('.eqlens-said.placed');for(var i=0;i<o.length;i++)place(o[i])}"
+    "addEventListener('scroll',again,{passive:true,capture:true});addEventListener('resize',again);"
+    "document.addEventListener('keydown',function(e){if(e.key!=='Escape'||native)return;"
+    "var o=document.querySelectorAll('.eqlens-said.on');for(var i=0;i<o.length;i++)shut(o[i])});"
     "document.addEventListener('click',function(e){"
     "if(!e.target.closest)return;"
     "function flip(f){var o=f.querySelector('.eqlens-open'),c=f.querySelector('.eqlens-closed'),"
     "k=f.querySelector('.eqlens-expand'),open=o.hidden;o.hidden=!open;c.hidden=open;"
-    "k.setAttribute('aria-expanded',String(open));k.textContent=open?'Collapse':'Expand'}"
+    "k.setAttribute('aria-expanded',String(open));label(k,open?'Collapse':'Expand');"
+    "var p=f.querySelector('.eqlens-said.placed');if(p)place(p)}"
     # A symbol that opens, or its row, does what the Expand button does.
     "var x=e.target.closest('.eqlens svg .x');if(x){flip(x.closest('.eqlens'));return}"
-    "var b=e.target.closest('.eqlens-bar button');if(!b)return;"
-    "var f=b.closest('.eqlens');"
+    "var b=e.target.closest('.eqlens button');if(!b)return;"
+    "var f=b.closest('.eqlens'),p=f.querySelector('.eqlens-said');"
     "if(b.classList.contains('eqlens-expand')){flip(f);return}"
+    # Without the popover API the Read and close buttons open and shut it here.
+    "if(b.classList.contains('eqlens-read')||b.classList.contains('eqlens-shut')){"
+    "if(!native){if(p.classList.contains('on'))shut(p);else{p.classList.add('on');place(p)}}return}"
+    "if(b.classList.contains('eqlens-say')){var S=window.speechSynthesis;if(!S)return;"
+    "if(b.classList.contains('on')){hush(p);return}"
+    # Chrome can drop an utterance spoken straight after cancel(), so cancel only what is playing.
+    "if(S.speaking||S.pending)S.cancel();var u=new SpeechSynthesisUtterance(p.getAttribute('data-say'));"
+    "u.onend=u.onerror=function(){b.classList.remove('on');label(b,'Read aloud')};"
+    "b.classList.add('on');label(b,'Stop reading');S.speak(u);return}"
+    "if(!b.classList.contains('eqlens-copy'))return;"
     "var t=f.getAttribute('data-tex');"
-    "function done(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1200)}"
+    "function done(){b.classList.add('done');label(b,'Copied');"
+    "setTimeout(function(){b.classList.remove('done');label(b,'Copy TeX')},1200)}"
     "function old(){var a=document.createElement('textarea');a.value=t;a.style.position='fixed';"
     "a.style.opacity='0';document.body.appendChild(a);a.select();"
     "try{document.execCommand('copy');done()}catch(_){}a.remove()}"
@@ -213,16 +282,38 @@ def _tiers(svg: str) -> int:
     return svg.count('<g class="t">')
 
 
+def _button(kind: str, words: str, icons: str, extra: str = "") -> str:
+    return (
+        f'<button type="button" class="eqlens-{kind}" aria-label="{words}" title="{words}"{extra}>'
+        + "".join(_ICONS[name] for name in icons.split())
+        + "</button>"
+    )
+
+
 def _html(tex: str, shut: str, wide: str) -> str:
-    """The fragment: a bar of buttons, the drawing, and the drawing with its tiers open."""
-    expand = '<button type="button" class="eqlens-expand" aria-expanded="false">Expand</button>' if wide else ""
+    """The fragment: a bar of glyph buttons, the drawing, the drawing with its tiers open, and its reading."""
+    expand = _button("expand", "Expand", "expand collapse", ' aria-expanded="false"') if wide else ""
     opened = f'<div class="eqlens-open" hidden>{wide.strip()}</div>' if wide else ""
+    words = read(tex)
+    said = ""
+    reader = ""
+    if words:
+        # The id only has to be unique on the page: two figures of one formula share a reading anyway.
+        pid = "eqread" + hashlib.sha1((tex + shut[:64]).encode("utf-8")).hexdigest()[:10]
+        reader = _button("read", "Read the formula", "read", f' popovertarget="{pid}"')
+        said = (
+            f'<div class="eqlens-said" id="{pid}" popover role="note" aria-label="The formula in words" '
+            f'data-say="{html.escape(say(tex), quote=True)}">'
+            f'<p class="eqlens-words">{html.escape(words)}</p><div class="eqlens-said-bar">'
+            + _button("say", "Read aloud", "say stop")
+            + _button("shut", "Close", "close", f' popovertarget="{pid}" popovertargetaction="hide"')
+            + "</div></div>"
+        )
     return (
         f'<figure class="eqlens" data-tex="{html.escape(tex, quote=True)}">'
-        f'<div class="eqlens-bar">{expand}'
-        '<button type="button" class="eqlens-copy" aria-label="Copy the TeX of this formula">Copy</button></div>'
-        f'<div class="eqlens-closed">{shut.strip()}</div>{opened}</figure>'
-        f"<style>{_STYLE}</style><script>{_SCRIPT}</script>\n"
+        f'<div class="eqlens-bar">{reader}{expand}{_button("copy", "Copy TeX", "copy done")}</div>'
+        f'<div class="eqlens-closed">{shut.strip()}</div>{opened}{said}</figure>'
+        f"<style>{_STYLE}</style><style>{_STYLE_OPEN}</style><script>{_SCRIPT}</script>\n"
     )
 
 

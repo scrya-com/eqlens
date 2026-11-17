@@ -194,6 +194,7 @@ def to_svg(
     bg: str | None,
     tips: bool = False,
     credit: tuple[float, float, float, str, str] | None = None,
+    desc: str = "",
 ) -> str:
     """One self-contained SVG. ``uid`` scopes its ids and CSS so many can share a page.
 
@@ -203,6 +204,7 @@ def to_svg(
     ``tips`` adds a browser tooltip to each symbol. It is off by default: the
     ledger row that lights up already says the same thing, and a tooltip covers it.
     ``credit`` is ``(x, y, size, url, png_base64)``: a small picture that links out.
+    ``desc`` is the formula in words, for a screen reader. It draws nothing.
     """
     ids: dict[tuple[str, int, int], str] = {}
     body: list[str] = []
@@ -267,7 +269,8 @@ def to_svg(
         '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
         f'class="{uid}" viewBox="0 0 {width} {height}" width="{_n(scene.width * 4 / 3)}" '
         f'height="{_n(scene.height * 4 / 3)}" role="img" aria-label={quoteattr(label)}>'
-        f"<style>{''.join(css)}</style><defs>{defs}</defs>{backdrop}{''.join(body)}</svg>\n"
+        + (f"<desc>{escape(desc)}</desc>" if desc else "")
+        + f"<style>{''.join(css)}</style><defs>{defs}</defs>{backdrop}{''.join(body)}</svg>\n"
     )
 
 

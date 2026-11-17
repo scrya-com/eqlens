@@ -26,7 +26,7 @@ _MAX_SYMBOLS = 32
 _DIM = 0.28
 
 
-def to_glsl(scene: Scene, *, label: str, fg: str, bg: str | None) -> str:
+def to_glsl(scene: Scene, *, label: str, fg: str, bg: str | None, words: str = "") -> str:
     colors = dict(ROLES, fg=fg)
     palette: list[str] = []
 
@@ -71,7 +71,7 @@ def to_glsl(scene: Scene, *, label: str, fg: str, bg: str | None) -> str:
             marks.append((mark.x, mark.y, mark.scale, glyphs[key], color(mark.fill), gi))
 
     background = palette_rgb(bg) if bg else None
-    return _source(scene, label, palette, segments, spans, boxes, marks, rules, groups, background)
+    return _source(scene, label, palette, segments, spans, boxes, marks, rules, groups, background, words)
 
 
 def palette_rgb(value: str) -> tuple[float, float, float]:
@@ -145,8 +145,9 @@ def _array(kind: str, name: str, items: list[str]) -> str:
     return f"const {kind} {name}[{len(items)}] = {kind}[](\n{rows}\n);"
 
 
-def _source(scene, label, palette, segments, spans, boxes, marks, rules, groups, background) -> str:
+def _source(scene, label, palette, segments, spans, boxes, marks, rules, groups, background, words="") -> str:
     label = " ".join(label.split()).replace("*/", "* /")
+    said = f"// Read: {' '.join(words.split())}\n" if words else ""
     pal = [f"vec3({_f(r)}, {_f(g)}, {_f(b)})" for r, g, b in map(palette_rgb, palette)]
     seg = [f"vec4({_f(a)}, {_f(b)}, {_f(c)}, {_f(d)})" for a, b, c, d in segments]
     span = [f"ivec2({start}, {count})" for start, count in spans]
@@ -163,7 +164,7 @@ def _source(scene, label, palette, segments, spans, boxes, marks, rules, groups,
         under = "vec4(0.)"
     return f"""#version 300 es
 // eqlens: {label}
-// A WebGL2 fragment shader. Set iResolution (vec3, pixels) and iMouse (vec4,
+{said}// A WebGL2 fragment shader. Set iResolution (vec3, pixels) and iMouse (vec4,
 // pixels from the bottom left, as Shadertoy gives it). For Shadertoy, paste
 // only what is between the two Shadertoy lines.
 precision highp float;

@@ -95,7 +95,7 @@ eqlens --brief \
   <img src="docs/tier.png" alt="A formula whose P opens into P equals A sub e times A sub e transpose, and whose A sub e opens again into V U transpose" width="640">
 </p>
 
-An `.html` output is a fragment for a web page with two buttons: **Expand** opens the tiers, and **Copy** puts the TeX on the clipboard.
+An `.html` output is a fragment for a web page with three glyph buttons: **Read** opens the whole formula in words beside the drawing, with a speaker to hear it; **Expand** opens the tiers; and **Copy** puts the TeX on the clipboard. `eqlens --read` prints the same words.
 
 ## Or draw it with a shader
 
