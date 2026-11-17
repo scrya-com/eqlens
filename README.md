@@ -96,7 +96,17 @@ eqlens --brief \
   <img src="docs/tier.png" alt="A formula whose P opens into P equals A sub e times A sub e transpose, and whose A sub e opens again into V U transpose" width="640">
 </p>
 
-An `.html` output is a fragment for a web page with two buttons: **Expand** opens the tiers, and **Copy** puts the TeX on the clipboard.
+An `.html` output is a fragment for a web page with three glyph buttons: **Read** opens the whole formula in words beside the drawing, with a speaker to hear it; **Expand** opens the tiers; and **Copy** puts the TeX on the clipboard. `eqlens --read` prints the same words.
+
+## Or draw it with a shader
+
+Name the output `.glsl` or `.frag`, or pass `--format glsl`, for a WebGL2 fragment shader that draws the formula, ledger and all, sharp at any size. Pointing at a symbol (`iMouse`) lights it as in the SVG, and the `mainImage` inside pastes straight into Shadertoy.
+
+```bash
+eqlens --legend -o euler.frag 'e^{i\pi}+1=0'
+```
+
+[See it running](https://claude.ai/artifact/Q6151o5gGRHZBegqGHh2sV): the equations of the TokenStream paper, each drawn by its own shader. [USAGE.md](USAGE.md#shader-glsl-for-webgl2-and-shadertoy) says how to run it.
 
 ## Work it by hand
 

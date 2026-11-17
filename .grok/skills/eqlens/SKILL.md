@@ -44,6 +44,8 @@ One formula per call. `$...$` wrappers are optional.
 
 SVG is the default for a file and for a pipe. `-o name.png` or `--format png` gives a PNG. Both are the same picture.
 
+Only when the user asks for a shader, GLSL, WebGL, or Shadertoy: `-o <path>.frag` (or `.glsl`, or `--format glsl`) writes a WebGL2 fragment shader that draws the same picture. It takes the uniforms `iResolution` and `iMouse`; the part between the two `// ---- Shadertoy` lines pastes into Shadertoy. Never use it to show a formula in the terminal.
+
 For a web page, write the SVG (or the `.html` fragment, which adds Copy and Expand buttons) and put it inline in the HTML, not in `<img>`. Inline, pointing at a symbol lights every place it appears and its ledger row. There is no tooltip unless you pass `--tips`; leave it off, the row already says it. Inside `<img>` the same file is a still picture. An SVG card carries a small eqlens mark in its corner that links to scrya.com/eqlens; leave it on unless the user asks for `--no-credit`. The page can restyle an inline SVG with the CSS variables `--eq-fg`, `--eq-bg`, `--eq-dim`, and `--eq-mark`.
 
 ## Legend

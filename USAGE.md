@@ -66,18 +66,43 @@ A symbol is one thing in every tier: the same color, listed once under the first
 
 `eqlens --inspect` with the same `--tier` flags prints the whole tree as JSON, so you can see what the next level holds before you write it.
 
-## Buttons: Expand and Copy
+## Buttons: Read, Expand, and Copy
 
-Name the output `.html`, or pass `--format html`, to get a fragment for a web page: the SVG under a small bar with two buttons.
+Name the output `.html`, or pass `--format html`, to get a fragment for a web page: the SVG under a small bar of glyph buttons. Each one has no words on it; its name is in its tooltip and its `aria-label`.
 
-- **Copy** puts the formula's TeX on the clipboard.
-- **Expand** is there when the formula has tiers. The drawing starts with them shut and Expand opens them; Collapse shuts them again.
+- **Read** (a speech bubble) opens the whole formula in words, the way it is said aloud: "L equals the squared L2 norm of (1 minus M) elementwise times (v hat l minus v l), over the L1 norm of (1 minus M), plus …". It opens above the drawing, or below it when there is no room above, and never on top of it, so the page does not grow and the formula stays in view. Its speaker button reads it aloud with the browser's own voice. Escape or a click elsewhere closes it.
+- **Expand** (two arrows) is there when the formula has tiers. The drawing starts with them shut and Expand opens them; Collapse shuts them again.
+- **Copy** (two sheets) puts the formula's TeX on the clipboard, and shows a tick when it has.
+
+The same reading is in every SVG as its `<desc>`, for screen readers, and at the top of a shader as a comment. `eqlens --read '<tex>'` prints it and draws nothing. In it a fraction bar is "over", `\|x\|_1` is "the L1 norm of x", `\odot` is "elementwise times", a one-letter label such as the layer in `v^l` is "v l" and not "v to the l", and a part that is more than one term keeps brackets so the reading says where it ends.
 
 ```bash
 eqlens --brief --tier 'P=A_eA_e^\top' -o recover.html 'v=P\,u_a+\frac{(I-P)\,(x_t+u_a)}{\sigma}'
 ```
 
 The fragment carries its own style and one short script. The SVG and PNG have no script in them. In an SVG or PNG the tiers are always open.
+
+## Shader: GLSL for WebGL2 and Shadertoy
+
+Name the output `.glsl` or `.frag`, or pass `--format glsl`, to get a fragment shader that draws the formula on the GPU. It is the same picture as the PNG, ledger and notes included, and it stays sharp at any size: every glyph outline is in the shader as line segments, and each pixel works out how far it is from the nearest edge. Nothing is loaded from a texture or a font.
+
+```bash
+eqlens --legend -o euler.frag 'e^{i\pi}+1=0'
+eqlens --format glsl 'E=mc^2' > emc2.glsl
+```
+
+[The demo page](https://claude.ai/artifact/Q6151o5gGRHZBegqGHh2sV) draws the five equations of the TokenStream paper ([arXiv 2611.16897](https://arxiv.org/abs/2611.16897)) this way, with hover, zoom, and Copy for Shadertoy.
+
+The file is a whole WebGL2 (GLSL ES 3.00) fragment shader. Draw a full-screen triangle and set two uniforms, named the way Shadertoy names them:
+
+- `iResolution`, a `vec3`: the canvas size in pixels.
+- `iMouse`, a `vec4`: the pointer in pixels from the bottom left. Pointing at a symbol lights it, its other appearances, and its row, and dims the rest, as hovering does in the SVG. `(0, 0)` means no pointer.
+
+The formula is fitted to the canvas and centered. A card has its opaque background; a bare formula is transparent, and the color comes out premultiplied, as a WebGL canvas expects.
+
+For Shadertoy, paste only the part between the lines `// ---- Shadertoy: paste from here ----` and `// ---- Shadertoy: paste to here ----`. It has a `mainImage` and no `#version` or uniforms of its own. Shadertoy only moves `iMouse` while the button is down, so there you click and drag to light a symbol.
+
+A bare formula is about 10 KB of shader; a card with a ledger is 50 to 120 KB. The `--tips`, `--no-credit`, and `--dpi` flags change nothing in a shader, and it has no mark in the corner. `eqlensd` serves the same thing at `/glsl`.
 
 ## The mark in the corner
 

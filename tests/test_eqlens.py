@@ -19,8 +19,10 @@ from eqlens.display import display_png
 from eqlens.engine import layout
 from eqlens.introspect import IntrospectError, inspect, introspect
 from eqlens.legend import MAX_TIERS, greek_in, hints_in, named_in, notation_in, occurrences, plain, plan, symbols
-from eqlens.render import FormulaError, render_html, render_png, render_svg
+from eqlens.render import FormulaError, render_glsl, render_html, render_png, render_svg
 from eqlens.server import Handler
+from eqlens.speech import read, say
+from html import escape as html_escape
 
 
 def _size(png: bytes) -> tuple[int, int]:
@@ -555,12 +557,12 @@ class HtmlTests(unittest.TestCase):
         self.assertIn('data-tex="a&lt;b &amp; c"', page)
         self.assertEqual(page.count('class="eqlens-copy"'), 1)
         self.assertNotIn('class="eqlens-expand"', page)
-        self.assertEqual(page.count("<svg "), 1)
+        self.assertEqual(page.count("<svg xmlns"), 1)
 
     def test_tiers_add_an_expand_button_and_a_second_drawing(self):
         page = render_html(self.TEX, define=["P=keeps the coarse part"], tier=TierTests.TIERS)
         self.assertEqual(page.count('class="eqlens-expand"'), 1)
-        self.assertEqual(page.count("<svg "), 2)
+        self.assertEqual(page.count("<svg xmlns"), 2)
         shut, wide = page.split('<div class="eqlens-open" hidden>')
         self.assertNotIn(r"VU", shut.split("data-tex")[0])
         height = lambda text: float(re.search(r'viewBox="0 0 [\d.]+ ([\d.]+)"', text).group(1))
@@ -578,6 +580,134 @@ class HtmlTests(unittest.TestCase):
         finally:
             if os.path.exists(path):
                 os.remove(path)
+
+
+class ReadTests(unittest.TestCase):
+    LOSS = (
+        r"L = \frac{\|(1-M)\odot(\hat{v}^{l}-v^{l})\|^{2}}{\|1-M\|_{1}}"
+        r" + \frac{\|M_\uparrow\odot(\hat{v}^{h}-v^{h})\|^{2}}{\|M_\uparrow\|_{1}}"
+    )
+
+    def test_a_loss_reads_in_phrases(self):
+        self.assertEqual(
+            read(self.LOSS).splitlines(),
+            [
+                "L equals",
+                "the squared L2 norm of (1 minus M) elementwise times (v hat l minus v l)",
+                "over the L1 norm of (1 minus M)",
+                "plus",
+                "the squared L2 norm of M up arrow elementwise times (v hat h minus v h)",
+                "over the L1 norm of M up arrow",
+            ],
+        )
+        self.assertNotIn("\n", say(self.LOSS))
+
+    def test_readings_people_use(self):
+        cases = {
+            r"e^{i\pi}+1=0": "e to the i pi plus 1 equals 0",
+            r"x=\frac{-b\pm\sqrt{b^{2}-4ac}}{2a}": "x equals (minus b plus or minus the square root of (b squared minus 4 a c)) over 2 a",
+            r"E_k=\frac{1}{2}mv^2": "E sub k equals one half m v squared",
+            r"\frac{\partial^2 u}{\partial t^2}=c^2\nabla^2u": "the second partial derivative of u with respect to t equals c squared del squared u",
+            r"\nabla\cdot\vec{E}=0": "del dot E vector equals 0",
+            r"P(A|B)=\frac{P(B|A)P(A)}{P(B)}": "P of A given B equals P of B given A P of A over P of B",
+            r"P(x)=|\psi(x)|^2": "P of x equals the squared absolute value of psi of x",
+            r"\langle\psi|\hat{A}|\psi\rangle": "the matrix element of A hat between psi and psi",
+            r"\hat{a}^\dagger|n\rangle": "a hat dagger ket n",
+            r"D_{KL}(P\|Q)": "D sub K L, (P parallel Q)",
+            r"\sum_{i=1}^{n} x_i^2": "the sum from i equals 1 to n of x sub i squared",
+            r"\lim_{n\to\infty} a_n": "the limit as n goes to infinity of a sub n",
+            r"A_e^\top": "A sub e transpose",
+            r"V_i^l": "V sub i superscript l",
+            r"u^\star=P\,\epsilon-x_0,\qquad P=A_eA_e^\top": "u star equals P epsilon minus x sub 0, P equals A sub e A sub e transpose",
+        }
+        for tex, words in cases.items():
+            with self.subTest(tex):
+                self.assertEqual(say(tex), words)
+
+    def test_every_equation_reads_without_tex_left_in_it(self):
+        for name, tex in ALL:
+            with self.subTest(name):
+                words = say(tex)
+                self.assertTrue(words)
+                self.assertNotRegex(words, r"\\|[{}^_]|rangle|langle")
+
+    def test_the_reading_is_in_every_output(self):
+        svg = render_svg(r"e^{i\pi}+1=0")
+        self.assertEqual(ElementTree.fromstring(svg).find("{http://www.w3.org/2000/svg}desc").text, say(r"e^{i\pi}+1=0"))
+        self.assertIn("// Read: e to the i pi plus 1 equals 0", render_glsl(r"e^{i\pi}+1=0"))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(main(["--read", self.LOSS]), 0)
+        self.assertEqual(out.getvalue().strip(), read(self.LOSS))
+
+    def test_the_web_buttons_are_glyphs_and_the_reading_is_a_popover(self):
+        page = render_html(self.LOSS, legend=True)
+        for button in re.findall(r"<button [^>]*>.*?</button>", page):
+            with self.subTest(button[:60]):
+                # No words on the face of a button: a glyph, with the words in its label and title.
+                self.assertEqual(re.sub(r"<[^>]+>", "", button).strip(), "")
+                self.assertRegex(button, r'aria-label="[^"]+" title="[^"]+"')
+        pid = re.search(r'class="eqlens-read"[^>]*popovertarget="(eqread[0-9a-f]+)"', page).group(1)
+        self.assertIn(f'<div class="eqlens-said" id="{pid}" popover', page)
+        self.assertIn(html_escape(read(self.LOSS)), page)
+        self.assertIn(f'data-say="{html_escape(say(self.LOSS), quote=True)}"', page)
+        # It sits outside the drawing, so opening it changes nothing in the figure's size.
+        closed = page.split('<div class="eqlens-closed">')[1].split("</div>")[0]
+        self.assertNotIn("eqlens-said", closed)
+
+
+class GlslTests(unittest.TestCase):
+    TEX = SymbolTests.TEX
+
+    def test_a_shader_is_webgl2_with_a_shadertoy_main_inside(self):
+        source = render_glsl(r"e^{i\pi}+1=0")
+        self.assertTrue(source.startswith("#version 300 es\n"))
+        inner = source.split("// ---- Shadertoy: paste from here ----")[1].split("// ---- Shadertoy: paste to here ----")[0]
+        self.assertIn("void mainImage(out vec4 fragColor, in vec2 fragCoord)", inner)
+        self.assertNotIn("#version", inner)
+        self.assertNotIn("uniform", inner)
+        self.assertIn("mainImage(eqlensColor, gl_FragCoord.xy)", source)
+
+    def test_array_sizes_match_their_entries(self):
+        source = render_glsl(self.TEX, legend=True, define=["P=what one token can carry"], notes=["fine print"])
+        for kind, name, size, body in re.findall(r"const (\w+) (\w+)\[(\d+)\] = \w+\[\]\(\n(.*?)\n\);", source, re.S):
+            with self.subTest(name):
+                self.assertEqual(int(size), body.count(f"{kind}("))
+        self.assertIn("const int RULES = 0;", render_glsl("x"))
+        self.assertIn("RULE[1] = vec4[](\n  vec4(0)", render_glsl("x"))
+
+    def test_the_shader_draws_the_same_scene_as_the_svg(self):
+        svg = render_svg(self.TEX, legend=True, credit=False)
+        source = render_glsl(self.TEX, legend=True)
+        marks = int(re.search(r"const int MARKS = (\d+);", source).group(1))
+        self.assertEqual(marks, svg.count("<use "))
+        width, height = (float(v) for v in re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg).group(1, 2))
+        scene = re.search(r"SCENE = vec2\(([\d.]+), ([\d.]+)\)", source)
+        self.assertAlmostEqual(float(scene.group(1)), width, places=1)
+        self.assertAlmostEqual(float(scene.group(2)), height, places=1)
+
+    def test_a_symbol_and_its_row_share_a_hover_bit(self):
+        source = render_glsl(self.TEX, define=["P=what one token can carry"])
+        # P: two glyphs in the formula and one row carry bit 0, and dim with the rest.
+        self.assertEqual(source.count("uvec2(1u, 1u)"), 3)
+
+    def test_colors_and_background(self):
+        source = render_glsl("x", color="#ff0000")
+        self.assertIn("vec3(1., 0., 0.)", source)
+        self.assertIn("UNDER = vec4(0.)", source)
+        self.assertIn("UNDER = vec4(0.071, 0.078, 0.102, 1.)", render_glsl("x", notes=["a card"]))
+
+    def test_the_command_line_picks_glsl_from_the_name(self):
+        for suffix in (".glsl", ".frag"):
+            path = self.id().replace(".", "_") + suffix
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(main(["--local", "-o", path, r"E=mc^2"]), 0)
+                with open(path, encoding="utf-8") as handle:
+                    self.assertTrue(handle.read().startswith("#version 300 es"))
+            finally:
+                if os.path.exists(path):
+                    os.remove(path)
 
 
 class _Block:
