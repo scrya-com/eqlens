@@ -55,6 +55,39 @@ eqlens --legend \
   <img src="docs/note.png" alt="ガウス分布。色付きの凡例と、その下に短い注が二つ" width="640">
 </p>
 
+## 手で動かす
+
+`--bench` は式を、値を変えて見られるものにします。記号の色はカードと同じです。
+
+```bash
+python3 -m pip install 'eqlens[bench]'
+eqlens --bench bell.html --bench bell.xlsx --bench bell.py \
+  --define '\mu=the center of the bell' --define '\sigma=how wide the bell is' \
+  --set 'x=0:-4:4' --set '\mu=0:-2:2' --set '\sigma=1:0.3:3' \
+  'f(x)=\frac{1}{\sigma\sqrt{2\pi}}\exp\left(-\frac{(x-\mu)^{2}}{2\sigma^{2}}\right)'
+```
+
+<p align="center">
+  <img src="docs/bench.png" alt="ガウス分布。σ、x、μ のスライダーがそれぞれの色で並び、グラフがそれに従う" width="640">
+</p>
+
+- `.html` は一枚のページ。絵、記号ごとのスライダー、グラフ、そしてその記号だけを動かしたときの小さなグラフ。
+- `.xlsx` はワークブック。記号ごとに色付きのセル、生きた数式、記号ごとのグラフ、eqlens と八点で照らし合わせる検算シート。
+- `.py` は [ManimGX](https://github.com/academa-labs/manimgx) のシーン。記号が順に範囲を動き、曲線が従います。`manimgx render bell.py Bench`。
+- `.json` は仕様。`eqlens --spec bell.json --bench bell.html` でもう一度作れます。
+
+実数の閉じた式は書かれたとおりに読みます。微分、積分、和、演算子のある式は推測しません。何が要るかを言うので、`--expr` で一つの場合を渡します。詳しくは [USAGE.md](USAGE.md#the-bench)。
+
+## MCP
+
+`eqlens-mcp` は eqlens を Claude Code、Claude Desktop、ほかの MCP クライアントに出します。API キーは要りません。記号の意味は呼ぶ側のモデルが言います。
+
+```bash
+claude mcp add --scope user eqlens -- eqlens-mcp
+```
+
+道具は三つ。`eqlens_render` は式を描き、`eqlens_inspect` は中身を並べ、`eqlens_bench` はページ、ワークブック、シーンを書きます。
+
 ## Claude Code
 
 数式をペインに出す。端末が PNG を描き、モッドはパスだけを持つ。

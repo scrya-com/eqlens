@@ -207,22 +207,127 @@ def introspect(
     }
 
 
+_BENCH_SYSTEM = """You turn one math formula into something a reader can work by hand: an \
+expression a calculator could run, and a sensible number and range for each symbol.
+
+You are given the formula as TeX and the plain name of each symbol in it.
+
+Give:
+- computable: true when the formula, or one standard special case of it, gives a real \
+number from real numbers. False for a formula that is only a statement about operators, \
+fields, or tensors with no case a reader would know.
+- why: when computable is false, one plain sentence saying why. When you chose a special \
+case, one plain sentence naming the case. Otherwise an empty string.
+- expr: "name = expression". The name is the plain name of the symbol the formula gives. \
+The expression uses the plain names you were given, numbers, + - * / **, brackets, pi, e, \
+and only these functions: sqrt exp ln log10 sin cos tan asin acos atan sinh cosh tanh abs. \
+No sums, integrals, derivatives, or conditionals. If the formula can be read as written, \
+write exactly what it says. If it cannot (it has an operator, an integral, an unknown \
+function), write one standard special case, and you may then use new single-letter names \
+for what the case needs; list each of them in symbols.
+- sweep: the plain name of the symbol to put along the bottom of the plot: the one a \
+textbook would plot against.
+- symbols: for every name in expr except the result, its key (the TeX as written in the \
+formula, or the new name), a value a reader would recognise, a min and a max to explore \
+(min < value < max, and the expression must stay real across the range), and the unit as \
+plain text or an empty string. Use SI values for physical constants. For a new name also \
+give means: what it is, at most 60 characters. For the others give an empty means.
+
+If the reader's context says what case they care about, use that case."""
+
+_BENCH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "computable": {"type": "boolean"},
+        "why": {"type": "string"},
+        "expr": {"type": "string"},
+        "sweep": {"type": "string"},
+        "symbols": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string"},
+                    "value": {"type": "number"},
+                    "min": {"type": "number"},
+                    "max": {"type": "number"},
+                    "unit": {"type": "string"},
+                    "means": {"type": "string"},
+                },
+                "required": ["key", "value", "min", "max", "unit", "means"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["computable", "why", "expr", "sweep", "symbols"],
+    "additionalProperties": False,
+}
+
+
+def workable(tex: str, *, context: str = "", model: str | None = None, client=None) -> dict:
+    """Ask Claude how to work ``tex`` out, and what number and range to give each symbol.
+
+    Returns ``{"expr", "sweep", "hints", "why"}`` for ``eqlens.bench.build``:
+    ``build(tex, expr=found["expr"], sweep=found["sweep"], hints=found["hints"])``.
+    The bench checks the expression against the formula wherever the formula can
+    be read as written, so a wrong one is caught there. Raises ``IntrospectError``
+    when Claude says the formula has no case that gives a number.
+    """
+    from eqlens.bench.expr import slug
+
+    found = inspect(tex)
+    names = sorted({slug(row["key"]) + "  (" + row["key"] + ")" for row in _keys(found)})
+    prompt = f"Formula:\n{found['tex']}\n\nPlain names:\n" + ("\n".join(f"- {name}" for name in names) or "(none listed: use each letter as its own name)")
+    if context.strip():
+        prompt += f"\n\nThe reader's context:\n{context.strip()}"
+    answer = _send(prompt, _BENCH_SYSTEM, _BENCH_SCHEMA, model or os.environ.get("EQLENS_MODEL") or MODEL, client)
+    if not answer.get("computable") or not str(answer.get("expr", "")).strip():
+        why = " ".join(str(answer.get("why", "")).split()) or "it has no case that gives a number"
+        raise IntrospectError(f"Claude found nothing to put on a bench: {why}")
+    hints = []
+    for part in answer.get("symbols") or []:
+        if not isinstance(part, dict) or not str(part.get("key", "")).strip():
+            continue
+        hint = {"key": str(part["key"]).strip().strip("$").strip()}
+        for name in ("value", "min", "max"):
+            if isinstance(part.get(name), (int, float)) and not isinstance(part.get(name), bool):
+                hint[name] = float(part[name])
+        if not ("min" in hint and "max" in hint and hint["min"] < hint["max"]):
+            hint.pop("min", None)
+            hint.pop("max", None)
+        for name in ("unit", "means"):
+            text = " ".join(str(part.get(name, "") or "").split())
+            if text:
+                hint[name] = text
+        hints.append(hint)
+    return {
+        "expr": " ".join(str(answer["expr"]).split()),
+        "sweep": str(answer.get("sweep", "") or "").strip(),
+        "hints": hints,
+        "why": " ".join(str(answer.get("why", "")).split()),
+    }
+
+
 def _ask(text: str, rows: list[dict], context: str, model: str, client) -> dict:
-    try:
-        import anthropic
-    except ImportError as exc:
-        raise IntrospectError("--introspect needs the anthropic package: pip install 'eqlens[ai]'") from exc
     ledger = "\n".join(f"- {row['key']}" + (f"  (said: {row['says']})" if row["says"] else "") for row in rows) or "(none)"
     prompt = f"Formula:\n{text}\n\nLedger keys:\n{ledger}"
     if context.strip():
         prompt += f"\n\nThe reader's context:\n{context.strip()}"
+    return _send(prompt, _SYSTEM, _SCHEMA, model, client)
+
+
+def _send(prompt: str, system: str, schema: dict, model: str, client) -> dict:
+    try:
+        import anthropic
+    except ImportError as exc:
+        raise IntrospectError("--introspect needs the anthropic package: pip install 'eqlens[ai]'") from exc
     try:
         client = client or anthropic.Anthropic()
         response = client.messages.create(
             model=model,
             max_tokens=16000,
-            system=_SYSTEM,
-            output_config={"effort": "medium", "format": {"type": "json_schema", "schema": _SCHEMA}},
+            system=system,
+            output_config={"effort": "medium", "format": {"type": "json_schema", "schema": schema}},
             messages=[{"role": "user", "content": prompt}],
         )
     except anthropic.AuthenticationError as exc:

@@ -1,6 +1,6 @@
 [project]
 name = "eqlens"
-version = "0.2.0"
+version = "0.3.0"
 description = "Draw a math formula as SVG or PNG, with colored symbols, a ledger that says how to read them, and hover tips."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,6 +12,8 @@ dependencies = ["matplotlib"]
 [project.optional-dependencies]
 # For --introspect, which asks Claude what the parts of a formula mean.
 ai = ["anthropic"]
+# For --bench FILE.xlsx, the bench as a workbook. The page and the scene need nothing more.
+bench = ["openpyxl"]
 
 [project.urls]
 Homepage = "https://github.com/scrya-com/eqlens"
@@ -19,6 +21,8 @@ Homepage = "https://github.com/scrya-com/eqlens"
 [project.scripts]
 eqlens = "eqlens.cli:main"
 eqlensd = "eqlens.server:main"
+# eqlens as an MCP server over stdio.
+eqlens-mcp = "eqlens.mcp:main"
 # The names before 0.2, kept so old scripts still run.
 mathcat = "eqlens.cli:main"
 mathd = "eqlens.server:main"

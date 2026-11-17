@@ -126,6 +126,23 @@ eqlens --legend \
 
 Each note is one plain sentence, under about 60 characters, saying what a part does, not what it is called. Two to four notes at most. No restating the ledger, no equations in prose, no hedging. Put symbols between `$...$` so they render as math. Skip notes when the formula speaks for itself or the user asked for the formula alone.
 
+## A bench: let the user work the formula
+
+When the user wants to explore, play with, plot, animate, or put a formula in a spreadsheet, build a bench. If the `eqlens_bench` MCP tool is there, call it. Otherwise use `--bench`:
+
+```bash
+eqlens --bench out/bell.html --bench out/bell.xlsx \
+  --define '\mu=the center of the bell' --define '\sigma=how wide the bell is' \
+  --set 'x=0:-4:4' --set '\mu=0:-2:2' --set '\sigma=1:0.3:3' \
+  'f(x)=\frac{1}{\sigma\sqrt{2\pi}}\exp\left(-\frac{(x-\mu)^{2}}{2\sigma^{2}}\right)'
+```
+
+`.html` is a page with sliders, `.xlsx` a workbook (needs `pip install 'eqlens[bench]'`), `.py` a ManimGX scene to render with `manimgx render FILE.py Bench`, `.json` the spec. Each prints its full path.
+
+Always give every symbol a number, a range worth exploring, and a unit: `--set 'KEY=value:min:max:unit'`, or `symbols` in the tool call. Without them every symbol starts at 1. Use `--constant` for physical constants, so they hold their real values. Give `--define` meanings as you would for a drawing.
+
+A non-zero exit that names a derivative, an integral, a sum, a matrix, or an undefined function means the formula cannot be worked out as written. Do not rewrite the formula. Give one standard case with `--expr 'OUT = expression'`, in plain names (`sigma`, `k_B`, `alpha_bar_t`, `x_hat`), with a `--set` for every new name the case brings, and tell the user which case you chose. `--solve KEY` turns a formula round. If eqlens says the expression does not give what the formula says, the expression is wrong: fix it, do not drop the check.
+
 ## Dialect
 
 These work: fractions, roots, integrals, sums, subscripts, superscripts, accents, `\left` and `\right`, `\mathrm`, `\mathbb`, `\mathcal`, `\text`, `\hbar`, `\nabla`, `\partial`, `\langle` and `\rangle`, and the Greek commands above.

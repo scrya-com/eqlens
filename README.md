@@ -11,6 +11,7 @@
 <p align="center">
   One math formula, drawn as an SVG or a PNG.<br>
   Every symbol colored, named the way you say it, and lit up with its meaning when you point at it.<br>
+  Then a bench to work it by hand: a page with sliders, a workbook, and an animation, in the same colors.<br>
   macOS and Ubuntu. No TeX install.
 </p>
 
@@ -96,6 +97,39 @@ eqlens --brief \
 </p>
 
 An `.html` output is a fragment for a web page with two buttons: **Expand** opens the tiers, and **Copy** puts the TeX on the clipboard.
+
+## Work it by hand
+
+`--bench` turns a formula into something you can change and watch. Every symbol keeps the color it has on the card.
+
+```bash
+python3 -m pip install 'eqlens[bench]'
+eqlens --bench bell.html --bench bell.xlsx --bench bell.py \
+  --define '\mu=the center of the bell' --define '\sigma=how wide the bell is' \
+  --set 'x=0:-4:4' --set '\mu=0:-2:2' --set '\sigma=1:0.3:3' \
+  'f(x)=\frac{1}{\sigma\sqrt{2\pi}}\exp\left(-\frac{(x-\mu)^{2}}{2\sigma^{2}}\right)'
+```
+
+<p align="center">
+  <img src="docs/bench.png" alt="The bell curve with a slider for sigma, x, and mu in their ledger colors, a plot that follows them, and a small plot beside each slider" width="640">
+</p>
+
+- `.html` is a page: the drawing, a slider for each symbol, a plot, and beside each slider a small plot of what that symbol alone does. Point at a symbol and its slider lights up.
+- `.xlsx` is a workbook: a colored cell for each symbol, the formula as a live cell formula, a chart for each symbol, and a sheet that checks the formula against eqlens at eight points.
+- `.py` is a [ManimGX](https://github.com/academa-labs/manimgx) scene: each symbol crosses its range in turn and the curve follows. `manimgx render bell.py Bench`.
+- `.json` is the spec. `eqlens --spec bell.json --bench bell.html` builds from it again.
+
+A real, closed-form formula is read as written. One with a derivative, an integral, a sum, or an operator is not guessed at: eqlens says what it needs, and `--expr` gives one case of it. [USAGE.md](USAGE.md#the-bench) has the rest.
+
+## MCP
+
+`eqlens-mcp` serves eqlens to Claude Code, Claude Desktop, or any MCP client. It needs no API key: the model that calls it says what the symbols mean.
+
+```bash
+claude mcp add --scope user eqlens -- eqlens-mcp
+```
+
+Three tools: `eqlens_render` draws a formula, `eqlens_inspect` lists what is in one, and `eqlens_bench` writes the page, the workbook, and the scene. Then ask: "build a bench for the ideal gas law".
 
 ## Or let Claude say it
 

@@ -105,6 +105,68 @@ eqlens --introspect --inspect 'i\hbar\frac{\partial}{\partial t}\Psi=\hat{H}\Psi
 
 The model is `claude-opus-5-5`. Set `EQLENS_MODEL` to use another.
 
+## The bench
+
+`--bench FILE` writes the formula as something to work by hand. The file's ending picks the kind, and you can repeat the flag:
+
+| Ending | What you get | Needs |
+|---|---|---|
+| `.html` | one page, no outside scripts: the drawing, sliders, a plot, a small plot per symbol | nothing more |
+| `.xlsx` | a workbook with live formulas and charts | `pip install 'eqlens[bench]'` |
+| `.py` | a ManimGX scene, class `Bench` | ManimGX, to render it |
+| `.json` | the spec, to keep | nothing more |
+
+Nothing is drawn unless you also give `-o`.
+
+```bash
+eqlens --bench gas.html --solve T --constant R 'PV=nRT'
+```
+
+**What is read as written.** Arithmetic, powers, fractions, roots, `\exp`, `\ln`, `\log_{10}`, the trigonometric and hyperbolic functions, and absolute values. `a/bc` is a over bc, as it is in print. `f(x)=...` gives `f` and puts `x` along the bottom of the plot. When neither side is one symbol, as in `PV=nRT`, the formula is solved for the first symbol that can be got alone; `--solve KEY` picks another, and also turns a formula round (`\lambda=h/p` for `p`). Roots and logs take the principal value.
+
+**What is not.** A derivative, an integral, a sum, a matrix, a bra-ket, an inequality, or a function the formula does not define. Two things that could be read two ways are refused too: a bare `\log` (write `\ln` or `\log_{10}`), and an `i`, which may be the imaginary unit (`--set 'i=2:1:5'` says it is a number). eqlens says which, exits 1, and writes nothing. Give one case with `--expr`:
+
+```bash
+eqlens --bench box.html \
+  --expr 'E = n**2*pi**2*hbar**2/(2*m*L**2)' \
+  --set 'n=1:1:5' --set 'L=1:0.5:3' --set 'm=1:0.5:2' \
+  -- '-\frac{\hbar^2}{2m}\nabla^2\psi+V\psi=E\psi'
+```
+
+In `--expr` each symbol goes under its plain name: `sigma` for `\sigma`, `k_B` for `k_B`, `alpha_bar_t` for `\bar{\alpha}_t`, `x_hat` for `\hat{x}`. It may hold numbers, `+ - * / **`, `pi`, `e`, and `sqrt exp ln log10 sin cos tan asin acos atan sinh cosh tanh abs`. Nothing in it is run as code. A name that is not in the formula must be given a number with `--set`, and the bench is then marked as one case. Where the formula can be read as written, the expression is checked against it at some thirty points, and a wrong one is refused.
+
+**Numbers and ranges.** `--set 'KEY=value'`, `--set 'KEY=value:min:max'`, or `--set 'KEY=value:min:max:unit'`. Without one a symbol starts at 1. `--sweep KEY` picks the symbol along the bottom of the plot. `--constant c` (and the rest of the table) holds a constant at its real SI value: it gets no slider.
+
+**With Claude.** `--introspect --bench FILE` asks Claude for the meanings, and also for the expression, the case when one is needed, and a sensible number and range for each symbol. That is a second request. Your own `--expr` and `--set` win. Add `--bench FILE.json` to keep the answer.
+
+**The workbook.** Change a colored cell on the Bench sheet and the result and every chart follow. The Sweeps sheet holds the numbers the charts draw. The Check sheet works the formula out at eight fixed points beside the answers eqlens got: its top cell reads "agree at 8 points". The file holds formulas and not their answers, so a viewer that does not calculate (a file preview, pandas) shows empty cells. Excel, LibreOffice, Numbers, and Google Sheets calculate when they open it. There are no slider controls in the sheet: openpyxl cannot write them, and the page has them.
+
+**From Python.**
+
+```python
+from eqlens.bench import build, make
+spec = build(r"E_k=\frac{1}{2}mv^2", sets=["m=2:1:10:kg", "v=3:0:10:m/s"])
+make(spec, "kinetic.html")
+```
+
+## MCP
+
+`eqlens-mcp` speaks MCP over stdio and needs nothing beyond eqlens itself. `eqlens-mcp --tools` lists the tools.
+
+```bash
+claude mcp add --scope user eqlens -- eqlens-mcp       # Claude Code, every project
+```
+
+For Claude Desktop or another client, the entry is `{"mcpServers": {"eqlens": {"command": "eqlens-mcp"}}}`.
+
+| Tool | What it does |
+|---|---|
+| `eqlens_render` | Draws a formula as PNG, SVG, or HTML. Returns the path, and the picture for a PNG. |
+| `eqlens_inspect` | Lists the symbols, says whether the formula works out as written, and gives each symbol's plain name. |
+| `eqlens_bench` | Writes the page, the workbook, the scene, and the spec. Default: the page and the workbook, in a temporary folder; `out_dir` says where to keep them. |
+
+The server asks no model and needs no key. When a formula cannot be read as written, `eqlens_bench` answers with the reason, and the model calls again with `expr` and `symbols` for one case.
+
 ## Hover
 
 Open the SVG in a browser, or put it inline in a page. Point at a symbol: every place it appears lights up with its ledger row, and the rest dims. Point at a ledger row and the formula shows where that symbol is. No script is involved, only CSS inside the SVG.

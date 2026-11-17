@@ -1,8 +1,8 @@
 {
   "name": "eqlens",
   "displayName": "eqlens",
-  "version": "0.2.0",
-  "description": "Draw a formula and show the PNG in a pane",
+  "version": "0.3.0",
+  "description": "Draw a formula and show the PNG in a pane, and build a bench for it over MCP",
   "author": { "name": "John D. Pope" },
   "license": "Do No Harm",
   "keywords": ["math", "svg", "png", "pane", "mod"]

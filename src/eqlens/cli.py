@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 
 from eqlens.constants import CONSTANTS, meaning
+from eqlens.constants import defines as constant_defines
 from eqlens.display import detect_display, display_png, write_file
 from eqlens.engine import FONTS
 from eqlens.legend import plain
@@ -111,6 +112,35 @@ def main(argv: list[str] | None = None) -> int:
         "meanings as --define items, so they can be kept and drawn again without asking",
     )
     parser.add_argument(
+        "--bench",
+        action="append",
+        default=[],
+        metavar="FILE",
+        help="write a bench: the formula as something to work by hand, each symbol in its ledger color. The ending "
+        "picks the kind: .xlsx a workbook, .html a page with sliders, .py a ManimGX scene, .json the spec to keep. "
+        "Repeat for more. Nothing is drawn unless -o is given too. .xlsx needs `pip install 'eqlens[bench]'`",
+    )
+    parser.add_argument(
+        "--expr",
+        metavar="'OUT = EXPRESSION'",
+        help="with --bench: how to work the formula out, when it cannot be read as written or you want one case of "
+        "it, for example 'E = sqrt((p*c)**2 + (m*c**2)**2)'. Each symbol goes under its plain name: sigma, m_1, k_B",
+    )
+    parser.add_argument("--solve", metavar="KEY", help="with --bench: turn the formula round to give this symbol")
+    parser.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE[:MIN:MAX[:UNIT]]",
+        help="with --bench: a symbol's number, and the range to explore, for example '\\sigma=1:0.2:3'; repeat for more",
+    )
+    parser.add_argument("--sweep", metavar="KEY", help="with --bench: the symbol along the bottom of the plot")
+    parser.add_argument(
+        "--spec",
+        metavar="FILE.json",
+        help="with --bench: build from a spec that --bench FILE.json kept. No formula is needed on the command line",
+    )
+    parser.add_argument(
         "--note",
         action="append",
         default=[],
@@ -121,10 +151,19 @@ def main(argv: list[str] | None = None) -> int:
         for name, (symbol, _what, _exact, _value) in CONSTANTS.items():
             print(f"{name:<10} {symbol:<14} {plain(meaning(name))}")
         return 0
+    if args.spec and not args.bench:
+        parser.error("--spec needs --bench FILE to say what to write")
+    if args.spec:
+        try:
+            return _bench(None, args, {})
+        except FormulaError as exc:
+            print(f"eqlens: {exc}", file=sys.stderr)
+            return 1
     if not args.tex:
         parser.error("give a formula")
     tex = " ".join(args.tex).strip()
     args.shared = []
+    named = list(args.constant)
 
     mode = args.display
     if args.output:
@@ -160,12 +199,28 @@ def main(argv: list[str] | None = None) -> int:
             if args.inspect:
                 print(json.dumps(found, ensure_ascii=False, indent=2))
                 return 0
+            if args.bench:
+                from eqlens.introspect import workable
+
+                asked = workable(tex, context=args.context)
+                asked.update(name=found["name"], about=asked["why"] or found["about"])
+                args.constant = named
+                # The constants come back as numbers, so their define lines are not wanted twice.
+                args.define = [item for item in found["define"] if item not in constant_defines(named)]
+                done = _bench(tex, args, asked)
+                if done or not args.output:
+                    return done
+                args.define, args.constant = found["define"], []
         elif args.inspect:
             from eqlens.introspect import inspect
 
             found = inspect(tex, args.define, args.tier, constant=args.constant, shared=args.shared)
             print(json.dumps(found, ensure_ascii=False, indent=2))
             return 0
+        elif args.bench:
+            done = _bench(tex, args, {})
+            if done or not args.output:
+                return done
         data = _render(tex, fmt, args)
     except FormulaError as exc:
         print(f"eqlens: {exc}", file=sys.stderr)
@@ -182,6 +237,47 @@ def main(argv: list[str] | None = None) -> int:
         print(write_file(data, "." + fmt))
     else:
         display_png(data, mode, sys.stdout.buffer)
+    return 0
+
+
+def _bench(tex: str | None, args, asked: dict) -> int:
+    """Write every --bench file. ``asked`` is what Claude said, when it was asked."""
+    from eqlens.bench import KINDS, build, load, make
+
+    for path in args.bench:
+        if os.path.splitext(path)[1].lower() not in KINDS:
+            raise FormulaError(f"--bench {path}: a bench file ends in .xlsx, .html, .py, or .json")
+    if args.spec:
+        try:
+            with open(args.spec, encoding="utf-8") as handle:
+                spec = load(json.load(handle))
+        except OSError as exc:
+            print(f"eqlens: cannot read {args.spec}: {exc.strerror}", file=sys.stderr)
+            return 1
+        except json.JSONDecodeError:
+            print(f"eqlens: {args.spec} is not JSON", file=sys.stderr)
+            return 1
+        except FormulaError as exc:
+            print(f"eqlens: {exc}", file=sys.stderr)
+            return 1
+    else:
+        spec = build(
+            tex,
+            expr=args.expr or asked.get("expr"),
+            solve=args.solve,
+            sets=args.set,
+            hints=asked.get("hints", ()),
+            sweep=args.sweep or asked.get("sweep") or None,
+            define=args.define,
+            tier=args.tier,
+            constant=args.constant,
+            shared=args.shared,
+            name=asked.get("name", ""),
+            about=asked.get("about", ""),
+            notes=args.note,
+        )
+    for path in args.bench:
+        print(make(spec, path, font=args.font))
     return 0
 
 
