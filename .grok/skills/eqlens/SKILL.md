@@ -98,7 +98,7 @@ Add a tier when a symbol stands for a formula the reader would want to see: one 
 
 A `--define` reaches a symbol inside a tier, so define the new symbols a tier brings in. In the pane tool, tiers go in `tiers`.
 
-For a web page write `-o name.html`. That is a fragment with a Copy button and, when there are tiers, an Expand button: the tiers start shut. In an SVG or PNG they are always open.
+For a web page write `-o name.html`. That is a fragment with a Copy button and, when there are tiers, an Expand button: the tiers start shut. In an SVG or PNG they are always open. In the fragment, pointing at a symbol opens a card under it with its meaning and, when the formula can be worked out, a plot of the result as that symbol alone changes; `--set 'KEY=value:min:max:unit'` gives the plot real numbers, `--expr` one case of a formula that cannot be read as written, and `--no-pop` leaves the cards out.
 
 ## Look inside
 

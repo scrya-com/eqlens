@@ -80,7 +80,24 @@ The same reading is in every SVG as its `<desc>`, for screen readers, and at the
 eqlens --brief --tier 'P=A_eA_e^\top' -o recover.html 'v=P\,u_a+\frac{(I-P)\,(x_t+u_a)}{\sigma}'
 ```
 
-The fragment carries its own style and one short script. The SVG and PNG have no script in them. In an SVG or PNG the tiers are always open.
+### A card under each symbol
+
+In the fragment, point at a symbol in the formula, or tab to it, or tap it, and a small card opens under it. Click pins the card; Escape or a click elsewhere shuts it. The card has:
+
+- the symbol, how it is said, and what it means (from `--legend`, `--define`, `--constant`);
+- when the formula can be worked out, a plot of the result as that symbol alone runs across its range, with a dot that travels the curve and the numbers under it;
+- for a constant, its value.
+
+Nothing is written per formula: every formula gets the words, and every formula eqlens can read as arithmetic gets the plot. A formula with a derivative, a sum, or an operator gets the plot when `--expr` gives one case of it. `--set`, `--expr`, and `--solve` mean what they mean to a bench.
+
+```bash
+eqlens --legend --define '\sigma=the spread' --set '\sigma=1:0.2:3' -o bell.html \
+  'f(x) = \frac{1}{\sigma\sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}'
+```
+
+`--no-pop` leaves the cards out. The card's colors follow `--eq-pop-bg`, `--eq-pop-line`, `--eq-fg`, and `--eq-dim` if the page sets them.
+
+The fragment carries its own style and its scripts. The SVG and PNG have no script in them. In an SVG or PNG the tiers are always open.
 
 ## Shader: GLSL for WebGL2 and Shadertoy
 
@@ -232,7 +249,8 @@ Each SVG scopes its own ids and styles, so many can share a page.
 | `--define 'KEY=meaning'` | Say what a symbol means here. Repeat for more |
 | `--note 'text'` | A short note in fine print under the formula. Repeat for more lines. `$...$` renders as math |
 | `-o file` | Write a file, print its absolute path, and do not display it. `.png` writes a PNG, `.html` a fragment with buttons, anything else an SVG |
-| `--format svg\|png\|html` | Choose the format whatever the file is called. `html` adds the Copy and Expand buttons |
+| `--format svg\|png\|html` | Choose the format whatever the file is called. `html` adds the Copy and Expand buttons and a card under each symbol |
+| `--no-pop` | `html` only: leave out the card that opens under a symbol |
 | `--font sans\|serif\|stix\|cm` | Typeface. `stix` and `cm` look like a printed paper |
 | `--local` | Render in this process |
 | `--bg '#12141a'` | Background. A bare formula is transparent by default; a card is dark |

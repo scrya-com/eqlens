@@ -101,6 +101,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--no-credit", action="store_true", help="leave the small eqlens mark off an SVG card")
     parser.add_argument(
+        "--no-pop",
+        action="store_true",
+        help="html only: leave out the card that opens under a symbol when it is pointed at. The card says what the "
+        "symbol means and, when the formula can be worked out, plots the result as that symbol alone changes. "
+        "--set, --expr, and --solve shape that plot as they shape a bench",
+    )
+    parser.add_argument(
         "--introspect",
         action="store_true",
         help="ask Claude what the parts of the formula mean and draw them as --define items. "
@@ -326,6 +333,11 @@ def _render(tex: str, fmt: str, args) -> bytes:
         "define": args.define,
         "font": args.font,
     }
+    if fmt == "html":
+        # The daemon does not take these, so a drawing that needs them is made here.
+        extra = {"pop": not args.no_pop, "sets": args.set, "expr": args.expr, "solve": args.solve}
+        if args.no_pop or args.set or args.expr or args.solve:
+            return render(tex, fmt, **options, **extra)
     if not args.local and args.url and _healthy(args.url):
         data = _fetch(args.url, tex, fmt, options)
         if data is not None:

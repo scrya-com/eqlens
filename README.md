@@ -96,7 +96,7 @@ eqlens --brief \
   <img src="docs/tier.png" alt="A formula whose P opens into P equals A sub e times A sub e transpose, and whose A sub e opens again into V U transpose" width="640">
 </p>
 
-An `.html` output is a fragment for a web page with three glyph buttons: **Read** opens the whole formula in words beside the drawing, with a speaker to hear it; **Expand** opens the tiers; and **Copy** puts the TeX on the clipboard. `eqlens --read` prints the same words.
+An `.html` output is a fragment for a web page with three glyph buttons: **Read** opens the whole formula in words beside the drawing, with a speaker to hear it; **Expand** opens the tiers; and **Copy** puts the TeX on the clipboard. `eqlens --read` prints the same words. Point at a symbol in the fragment and a card opens underneath: what the symbol means and, when the formula can be worked out, a small moving plot of the result as that symbol alone changes. It works for any formula; nothing is drawn by hand.
 
 ## Or draw it with a shader
 

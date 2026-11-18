@@ -710,6 +710,78 @@ class GlslTests(unittest.TestCase):
                     os.remove(path)
 
 
+class PopTests(unittest.TestCase):
+    GAUSS = r"f(x) = \frac{1}{\sigma\sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}"
+
+    def cards(self, page):
+        found = re.search(r'<script type="application/json" class="eqlens-pops">(.*?)</script>', page, re.S)
+        return json.loads(found.group(1)) if found else None
+
+    def test_a_symbol_gets_its_words_and_a_curve_of_the_result(self):
+        page = render_html(self.GAUSS, legend=True, define=[r"\sigma=the spread"])
+        cards = self.cards(page)
+        sigma = next(card for card in cards if card["g"] == "σ")
+        self.assertEqual((sigma["t"], sigma["n"], sigma["out"]), ("sigma", "the spread", "f"))
+        self.assertEqual(len(sigma["ys"]), 49)
+        self.assertLess(sigma["lo"], sigma["at"])
+        self.assertLess(sigma["at"], sigma["hi"])
+        # A wider bell is a lower one where it stands.
+        self.assertGreater(sigma["ys"][10], sigma["ys"][-1])
+        self.assertIn("eqlens-hint", page)
+        self.assertIn("__eqlensPop", page)
+
+    def test_a_card_sits_at_its_symbols_class_in_the_drawing(self):
+        page = render_html(self.GAUSS, legend=True)
+        cards = self.cards(page)
+        for index, card in enumerate(cards):
+            self.assertIn(f" s{index}", page, card)
+
+    def test_a_formula_that_cannot_be_worked_out_still_gets_the_words(self):
+        page = render_html(dict(ALL)["schrodinger"], legend=True, define=[r"\Psi=the wave function"])
+        cards = self.cards(page)
+        self.assertTrue(cards)
+        self.assertFalse(any("ys" in card for card in cards))
+        self.assertIn("the wave function", [card["n"] for card in cards])
+
+    def test_sets_and_constants_shape_the_curve(self):
+        page = render_html(
+            r"E^2 = (pc)^2 + (mc^2)^2", constant=["c"], define=["m=rest mass"], sets=["m=1e-30:0:3e-30:kg", "p=1e-22:0:5e-22"]
+        )
+        cards = {card["g"]: card for card in self.cards(page)}
+        self.assertEqual((cards["m"]["lo"], cards["m"]["hi"], cards["m"]["u"]), (0.0, 3e-30, "kg"))
+        self.assertEqual(cards["c"]["v"], 299792458.0)
+        self.assertNotIn("ys", cards["c"])
+
+    def test_nothing_to_say_means_no_cards_and_no_script(self):
+        page = render_html(r"a^2+b^2=c^2")
+        self.assertIsNone(self.cards(page))
+        self.assertNotIn("__eqlensPop", page)
+        off = render_html(self.GAUSS, legend=True, pop=False)
+        self.assertIsNone(self.cards(off))
+        self.assertNotIn("__eqlensPop", off)
+
+    def test_card_text_cannot_close_its_script(self):
+        page = render_html(r"a+b", define=["a=</script><b>x"])
+        self.assertEqual(page.count("</script>"), 3)
+        self.assertIn("\\u003c/script>", page)
+
+    def test_the_command_line_takes_set_and_no_pop(self):
+        path = os.path.join(self.id().replace(".", "_") + ".html")
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["--local", "--define", "a=one side", "--set", "a=3:1:9", "-o", path, r"c=\sqrt{a^2+b^2}"]), 0)
+            with open(path, encoding="utf-8") as handle:
+                card = next(card for card in self.cards(handle.read()) if card["g"] == "a")
+            self.assertEqual((card["lo"], card["at"], card["hi"]), (1.0, 3.0, 9.0))
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["--local", "--define", "a=one side", "--no-pop", "-o", path, r"c=\sqrt{a^2+b^2}"]), 0)
+            with open(path, encoding="utf-8") as handle:
+                self.assertIsNone(self.cards(handle.read()))
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
+
 class _Block:
     type = "text"
 

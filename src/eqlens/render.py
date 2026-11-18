@@ -94,6 +94,10 @@ def render(
     known: bool | None = None,
     constant: Sequence[str] = (),
     shared: Sequence[str] = (),
+    pop: bool = True,
+    sets: Sequence = (),
+    expr: str | None = None,
+    solve: str | None = None,
     _disclose: str | None = None,
 ) -> bytes:
     """Draw ``tex`` as ``svg``, ``png``, ``html``, or ``glsl`` bytes.
@@ -122,7 +126,13 @@ def render(
     ``constant`` names constants from the built-in table, such as ``c`` or
     ``k_B``: each gets its meaning and value without anyone typing a number.
     ``shared`` is ``"KEY=meaning"`` items from a symbols file: one is used only
-    where its symbol appears, and ``define`` wins for the same symbol. ``font`` is one of ``sans``, ``serif``,
+    where its symbol appears, and ``define`` wins for the same symbol. ``pop``
+    (``html`` only, on by default) opens a small card under a symbol that is
+    pointed at, focused, or tapped: its name, its meaning, and, when the formula
+    can be worked out, a plot of the result as that symbol alone changes.
+    ``sets``, ``expr``, and ``solve`` are for that plot and mean what they mean
+    to a bench: a number and a range for a symbol, one case of a formula that
+    cannot be read as written, and the symbol to solve for. ``font`` is one of ``sans``, ``serif``,
     ``stix``, ``cm``. ``dpi`` only matters for PNG.
     """
     if fmt not in ("svg", "png", "html", "glsl"):
@@ -139,7 +149,8 @@ def render(
     text = normalize_tex(tex)
     notes = [note.strip() for note in notes if note and note.strip()]
     # A constant is a define the library writes; one of the caller's own for the same symbol is read later and wins.
-    define = constant_defines(constant) + [item for item in define if item and item.strip()]
+    own = [item for item in define if item and item.strip()]
+    define = constant_defines(constant) + own
     shared = [item for item in shared if item and item.strip()]
 
     tier = [item for item in tier if item and item.strip()]
@@ -154,7 +165,20 @@ def render(
         else:
             wide = ""
             shut = render(text, "svg", known=False, **options).decode("utf-8")
-        return _html(text[1:-1].strip(), shut, wide).encode("utf-8")
+        pops = ""
+        if pop:
+            from eqlens.pop import cards, embed
+
+            # The same plan the drawings were made from, so a card's place in the list is its symbol's class.
+            _top, rows = plan(
+                text[1:-1], legend=legend or brief, define=define, tier=tier if wide else (), brief=brief,
+                known=opens and bool(wide), shared=shared,
+            )
+            pops = embed(cards(
+                text[1:-1].strip(), rows, define=own, tier=tier, constant=constant, shared=shared,
+                sets=sets, expr=expr, solve=solve,
+            ))
+        return _html(text[1:-1].strip(), shut, wide, pops).encode("utf-8")
 
     formula = layout(text, _FORMULA, font)
     top, rows = plan(text[1:-1], legend=legend or brief, define=define, tier=tier, brief=brief, known=bool(known), shared=shared)
@@ -290,8 +314,13 @@ def _button(kind: str, words: str, icons: str, extra: str = "") -> str:
     )
 
 
-def _html(tex: str, shut: str, wide: str) -> str:
-    """The fragment: a bar of glyph buttons, the drawing, the drawing with its tiers open, and its reading."""
+def _html(tex: str, shut: str, wide: str, pops: str = "") -> str:
+    """The fragment: a bar of glyph buttons, the drawing, the drawing with its tiers open, its reading, and the cards that pop over it."""
+    from eqlens.pop import SCRIPT, STYLE
+
+    hint = '<span class="eqlens-hint"><span class="h">Point at a symbol</span><span class="t">Tap a symbol</span></span>'
+    if not pops:
+        hint = STYLE = SCRIPT = ""
     expand = _button("expand", "Expand", "expand collapse", ' aria-expanded="false"') if wide else ""
     opened = f'<div class="eqlens-open" hidden>{wide.strip()}</div>' if wide else ""
     words = read(tex)
@@ -311,9 +340,11 @@ def _html(tex: str, shut: str, wide: str) -> str:
         )
     return (
         f'<figure class="eqlens" data-tex="{html.escape(tex, quote=True)}">'
-        f'<div class="eqlens-bar">{reader}{expand}{_button("copy", "Copy TeX", "copy done")}</div>'
-        f'<div class="eqlens-closed">{shut.strip()}</div>{opened}{said}</figure>'
-        f"<style>{_STYLE}</style><style>{_STYLE_OPEN}</style><script>{_SCRIPT}</script>\n"
+        f'<div class="eqlens-bar">{hint}{reader}{expand}{_button("copy", "Copy TeX", "copy done")}</div>'
+        f'<div class="eqlens-closed">{shut.strip()}</div>{opened}{said}{pops}</figure>'
+        f"<style>{_STYLE}</style><style>{_STYLE_OPEN}{STYLE}</style><script>{_SCRIPT}</script>"
+        + (f"<script>{SCRIPT}</script>" if SCRIPT else "")
+        + "\n"
     )
 
 
