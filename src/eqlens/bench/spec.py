@@ -80,11 +80,15 @@ def _guesses(name: str) -> list[str]:
 
 
 def _sets(items: Sequence) -> list[dict]:
-    """``KEY=value``, ``KEY=value:min:max``, ``KEY=value:min:max:unit``, or the same as a dict."""
+    """``KEY=value``, ``KEY=value:min:max``, ``KEY=value:min:max:unit``, or the same as a dict.
+
+    ``max/step`` says the symbol moves in steps: ``n=0:0:10/1`` is a level that
+    is 0, 1, 2, up to 10 and nothing between. A dict says it with ``step``.
+    """
     found = []
     for item in items or ():
         if isinstance(item, dict):
-            entry = {name: item[name] for name in ("key", "value", "min", "max", "unit", "means") if item.get(name) not in (None, "")}
+            entry = {name: item[name] for name in ("key", "value", "min", "max", "step", "unit", "means") if item.get(name) not in (None, "")}
             if not str(entry.get("key", "")).strip():
                 raise FormulaError("a symbol setting needs a key")
             entry["key"] = str(entry["key"]).strip().strip("$").strip()
@@ -97,10 +101,13 @@ def _sets(items: Sequence) -> list[dict]:
             if len(parts) == 2:
                 raise FormulaError("--set takes a range as min:max, for example '\\sigma=1:0.2:3'")
             if len(parts) >= 3:
-                entry["min"], entry["max"] = parts[1], parts[2]
+                top, slash, step = parts[2].partition("/")
+                entry["min"], entry["max"] = parts[1], top
+                if slash:
+                    entry["step"] = step
             if len(parts) == 4:
                 entry["unit"] = parts[3].strip()
-        for name in ("value", "min", "max"):
+        for name in ("value", "min", "max", "step"):
             if name in entry:
                 try:
                     entry[name] = float(entry[name])
@@ -110,6 +117,17 @@ def _sets(items: Sequence) -> list[dict]:
                     raise FormulaError(f"the {name} of {entry['key']} is not a number")
         if "min" in entry and "max" in entry and not entry["min"] < entry["max"]:
             raise FormulaError(f"the range of {entry['key']} must run from a smaller number to a larger one")
+        if "step" in entry:
+            if "min" not in entry:
+                raise FormulaError(f"the step of {entry['key']} needs a range: value:min:max/step")
+            count = (entry["max"] - entry["min"]) / entry["step"] if entry["step"] > 0 else 0
+            if not 1 <= count <= 200:
+                raise FormulaError(f"the step of {entry['key']} must cut its range into 1 to 200 steps")
+            # The range ends on a step, and the symbol stands on one.
+            entry["max"] = entry["min"] + math.floor(count + 1e-9) * entry["step"]
+            if "value" in entry:
+                at = round((entry["value"] - entry["min"]) / entry["step"])
+                entry["value"] = min(entry["max"], max(entry["min"], entry["min"] + at * entry["step"]))
         found.append(entry)
     return found
 
@@ -370,6 +388,8 @@ def build(
         unit = chosen.get(key, {}).get("unit")
         if unit:
             entry["unit"] = unit
+        if role != "output" and key not in fixed and chosen.get(key, {}).get("step"):
+            entry["step"] = chosen[key]["step"]
         entry.setdefault("unit", "")
         return entry
 
@@ -420,7 +440,7 @@ def load(data: dict) -> dict:
         output = data.get("output") or {}
         expr = data["expr"] if not output.get("name") or not output.get("key") else f"{output['name']} = {data['expr']}"
         sets = [
-            {name: entry.get(name) for name in ("key", "value", "min", "max", "unit")}
+            {name: entry.get(name) for name in ("key", "value", "min", "max", "step", "unit")}
             for entry in data["symbols"]
             if entry.get("role") != "constant"
         ]
@@ -464,6 +484,9 @@ def curve(spec: dict, key: str, steps: int = 80) -> tuple[list[float], list[floa
     entry = next(item for item in spec["symbols"] if item["key"] == key)
     node = tree(spec)
     env = {item["key"]: item["value"] for item in spec["symbols"]}
+    if entry.get("step"):
+        # A symbol that moves in steps is worked out on its steps and nowhere between.
+        steps = round((entry["max"] - entry["min"]) / entry["step"])
     xs = [entry["min"] + (entry["max"] - entry["min"]) * i / steps for i in range(steps + 1)]
     return xs, [value(node, dict(env, **{key: x})) for x in xs]
 

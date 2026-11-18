@@ -51,7 +51,7 @@ def cards(
 
     A symbol the formula can be worked out for also has ``lo``, ``hi``, ``at``
     (its range and where it stands), ``ys`` (the result across the range,
-    None where there is none), ``out`` (what the result is called), and the
+    None where there is none), ``st`` (its step, when it moves in steps), ``out`` (what the result is called), and the
     units ``u`` and ``ou``. A constant has ``v``, its value. What the formula
     gives has ``now``, the result where every symbol stands. ``plot`` False
     keeps the words and leaves the numbers out: for a formula of matrices or
@@ -97,6 +97,9 @@ def cards(
         if all(y is None for y in ys):
             continue
         card.update(lo=entry["min"], hi=entry["max"], at=entry["value"], ys=ys, out=output["shown"], ou=output["unit"])
+        if entry.get("step"):
+            # It moves in steps: the card draws a dot for each and no line between.
+            card["st"] = entry["step"]
     if output["key"]:
         index = where.get(_shape(output["key"]))
         now = _round(work_out(spec))
@@ -178,13 +181,16 @@ function plot(p,c){var svg=p.querySelector('svg'),read=p.querySelector('.eqlens-
  if(lo<0&&hi>0)svg.appendChild(el('line',{x1:L,x2:W-R,y1:Y(0),y2:Y(0),stroke:'currentColor','stroke-opacity':.22,'stroke-dasharray':'3 3'}));
  svg.appendChild(el('line',{x1:L,x2:W-R,y1:H-B+4,y2:H-B+4,stroke:'currentColor','stroke-opacity':.22}));
  var d='',pen=false;ys.forEach(function(y,i){if(y==null){pen=false;return}d+=(pen?'L':'M')+X(i/n).toFixed(1)+' '+Y(y).toFixed(1);pen=true});
- svg.appendChild(el('path',{d:d,fill:'none',stroke:ink,'stroke-width':2.2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+ if(c.st){ys.forEach(function(y,i){if(y==null)return;var x=X(i/n).toFixed(1);
+   svg.appendChild(el('line',{x1:x,x2:x,y1:H-B+4,y2:Y(y).toFixed(1),stroke:ink,'stroke-opacity':.3}));
+   svg.appendChild(el('circle',{cx:x,cy:Y(y).toFixed(1),r:n>40?1.6:2.6,fill:ink}))})}
+ else svg.appendChild(el('path',{d:d,fill:'none',stroke:ink,'stroke-width':2.2,'stroke-linejoin':'round','stroke-linecap':'round'}));
  svg.appendChild(el('text',{x:L,y:H-4},num(c.lo)));
  svg.appendChild(el('text',{x:W-R,y:H-4,'text-anchor':'end'},num(c.hi)));
  svg.appendChild(el('text',{x:W/2,y:H-4,'text-anchor':'middle'},c.g+unit(c.u)));
  var hair=el('line',{y1:T,y2:H-B+4,stroke:ink,'stroke-opacity':.45}),dot=el('circle',{r:4.5,fill:ink,stroke:'var(--eq-pop-bg,#1c1f27)','stroke-width':2});
  svg.appendChild(hair);svg.appendChild(dot);
- function put(u){var q=u*n,i=Math.min(n-1,Math.floor(q)),a=ys[i],b=ys[i+1],y=(a==null||b==null)?null:a+(b-a)*(q-i),x=c.lo+(c.hi-c.lo)*u;
+ function put(u){if(c.st)u=Math.round(u*n)/n;var q=u*n,i=Math.min(n-1,Math.floor(q)),a=ys[i],b=ys[i+1],y=(a==null||b==null)?null:a+(b-a)*(q-i),x=c.lo+(c.hi-c.lo)*u;
   hair.setAttribute('x1',X(u));hair.setAttribute('x2',X(u));
   if(y==null){dot.style.display='none'}else{dot.style.display='';dot.setAttribute('cx',X(u));dot.setAttribute('cy',Y(y))}
   read.textContent=c.g+' = '+num(x)+unit(c.u)+'  →  '+c.out+' = '+num(y)+(y==null?'':unit(c.ou))}
@@ -192,7 +198,7 @@ function plot(p,c){var svg=p.querySelector('svg'),read=p.querySelector('.eqlens-
  if(still){put(home);return}
  // Start where the symbol stands, then travel the range and back.
  var t0=performance.now(),ph=Math.acos(1-2*home);
- (function step(now){put(.5-.5*Math.cos(ph+(now-t0)/5200*2*Math.PI));raf=requestAnimationFrame(step)})(t0)}
+ (function step(now){put(.5-.5*Math.cos(ph+(now-t0)/(c.st?Math.max(5200,n*900):5200)*2*Math.PI));raf=requestAnimationFrame(step)})(t0)}
 function light(f,i){f.querySelectorAll('svg').forEach(function(s){if(!s.closest('.eqlens-pop'))s.classList.toggle('eqlens-lit',i>=0)});
  f.querySelectorAll('.eqlens-on').forEach(function(e){e.classList.remove('eqlens-on')});
  if(i>=0)f.querySelectorAll('g.s'+i).forEach(function(e){e.classList.add('eqlens-on')})}

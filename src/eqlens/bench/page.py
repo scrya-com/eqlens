@@ -61,7 +61,7 @@ function f(env){var y;try{y=F(env)}catch(e){y=NaN}return (typeof y==='number'&&i
 function fmt(x){if(!isFinite(x))return 'no real value';if(x===0)return '0';var a=Math.abs(x);
  if(a>=1e5||a<1e-3)return x.toExponential(3).replace(/\.?0+e/,'e');return String(+x.toPrecision(4))}
 function num(x){var a=Math.abs(x);return (a!==0&&(a>=1e6||a<1e-4))?x.toExponential(4).replace(/\.?0+e/,'e'):String(+x.toPrecision(6))}
-function run(s,env,n){var xs=[],ys=[],e={},k;for(k in env)e[k]=env[k];
+function run(s,env,n){var xs=[],ys=[],e={},k;for(k in env)e[k]=env[k];if(s.step)n=Math.round((s.max-s.min)/s.step);
  for(var i=0;i<=n;i++){var x=s.min+(s.max-s.min)*i/n;e[s.name]=x;xs.push(x);ys.push(f(e))}return [xs,ys]}
 function span(lists){var all=[];lists.forEach(function(ys){ys.forEach(function(y){if(!isNaN(y))all.push(y)})});
  if(!all.length)return [0,1];all.sort(function(a,b){return a-b});
@@ -73,7 +73,9 @@ function ticks(lo,hi,n){var raw=(hi-lo)/n,m=Math.pow(10,Math.floor(Math.log10(ra
 function size(c){var d=window.devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;
  if(c.width!==Math.round(w*d)||c.height!==Math.round(h*d)){c.width=Math.round(w*d);c.height=Math.round(h*d)}
  var g=c.getContext('2d');g.setTransform(d,0,0,d,0,0);g.clearRect(0,0,w,h);return [g,w,h]}
-function path(g,xs,ys,X,Y){var pen=false;g.beginPath();for(var i=0;i<xs.length;i++){
+function path(g,xs,ys,X,Y,s,r){if(s&&s.step){g.save();g.setLineDash([]);g.fillStyle=g.strokeStyle;for(var j=0;j<xs.length;j++){
+ if(!isNaN(ys[j])){g.beginPath();g.arc(X(xs[j]),Y(ys[j]),r||3.5,0,7);g.fill()}}g.restore();return}
+ var pen=false;g.beginPath();for(var i=0;i<xs.length;i++){
  if(isNaN(ys[i])){pen=false;continue}if(pen)g.lineTo(X(xs[i]),Y(ys[i]));else g.moveTo(X(xs[i]),Y(ys[i]));pen=true}g.stroke()}
 function drawMain(){var q=size(main),g=q[0],w=q[1],h=q[2],L=58,R=14,T=12,B=40;
  var now=run(sweep,v,240),was=run(sweep,start,240),ys=span([now[1],was[1]]);
@@ -86,19 +88,19 @@ function drawMain(){var q=size(main),g=q[0],w=q[1],h=q[2],L=58,R=14,T=12,B=40;
   g.beginPath();g.moveTo(L,Y(t));g.lineTo(w-R,Y(t));g.stroke();g.fillText(fmt(t),L-8,Y(t))});
  g.textAlign='right';g.textBaseline='bottom';g.fillStyle=sweep.color;g.fillText(sweep.shown+(sweep.unit?' ('+sweep.unit+')':''),w-R,h);
  g.save();g.beginPath();g.rect(L,T,w-L-R,h-T-B);g.clip();
- g.setLineDash([4,4]);g.strokeStyle='#4a5160';g.lineWidth=1.5;path(g,was[0],was[1],X,Y);g.setLineDash([]);
- g.strokeStyle=sweep.color;g.lineWidth=2.5;g.lineJoin='round';path(g,now[0],now[1],X,Y);
+ g.setLineDash([4,4]);g.strokeStyle='#4a5160';g.lineWidth=1.5;path(g,was[0],was[1],X,Y,sweep,2.5);g.setLineDash([]);
+ g.strokeStyle=sweep.color;g.lineWidth=2.5;g.lineJoin='round';path(g,now[0],now[1],X,Y,sweep,4);
  var y=f(v);if(!isNaN(y)){g.fillStyle='#f2f2f7';g.beginPath();g.arc(X(v[sweep.name]),Y(y),5,0,7);g.fill()}
  g.restore();out.textContent=fmt(y)+(S.output.unit&&!isNaN(y)?' '+S.output.unit:'')}
 function drawSpark(s,c){var q=size(c),g=q[0],w=q[1],h=q[2],d=run(s,v,60),ys=span([d[1]]);
  var X=function(x){return 3+(x-s.min)/(s.max-s.min)*(w-6)},Y=function(y){return h-4-(y-ys[0])/(ys[1]-ys[0])*(h-8)};
- g.strokeStyle=s.color;g.lineWidth=1.6;g.lineJoin='round';path(g,d[0],d[1],X,Y);
+ g.strokeStyle=s.color;g.lineWidth=1.6;g.lineJoin='round';path(g,d[0],d[1],X,Y,s,d[0].length>30?1.2:2);
  var y=f(v);if(!isNaN(y)){g.fillStyle='#f2f2f7';g.beginPath();g.arc(X(v[s.name]),Y(y),3,0,7);g.fill()}}
 var rows={};
 moving.forEach(function(s){var el=root.querySelector('.row[data-name="'+s.name+'"]');
  rows[s.name]={el:el,range:el.querySelector('input[type=range]'),num:el.querySelector('input[type=number]'),spark:el.querySelector('canvas')}});
 function draw(){drawMain();moving.forEach(function(s){drawSpark(s,rows[s.name].spark)})}
-function set(s,x,from){if(!isFinite(x))return;v[s.name]=x;var r=rows[s.name];
+function set(s,x,from){if(!isFinite(x))return;if(s.step)x=s.min+Math.round((x-s.min)/s.step)*s.step;v[s.name]=x;var r=rows[s.name];
  if(from!==r.range)r.range.value=x;if(from!==r.num)r.num.value=num(x);draw()}
 moving.forEach(function(s){var r=rows[s.name];
  r.range.addEventListener('input',function(){set(s,parseFloat(r.range.value),r.range)});
@@ -164,13 +166,14 @@ def write(spec: dict, font: str = "sans") -> bytes:
                 f'<div>{entry["value"]:.6g}{unit} <span class="says">a constant: it does not change</span></div>{means}</div>'
             )
             continue
-        step = (entry["max"] - entry["min"]) / 400
+        step = entry.get("step") or (entry["max"] - entry["min"]) / 400
+        fine = repr(entry["step"]) if entry.get("step") else "any"
         label = esc(entry["says"] or entry["shown"])
         unit = f' <span class="says">{esc(entry["unit"])}</span>' if entry["unit"] else ""
         rows.append(
             f'<div class="row" data-name="{esc(entry["name"])}"{row} style="--c:{entry["color"]}">{head}'
             f'<input type="range" min="{entry["min"]!r}" max="{entry["max"]!r}" step="{step!r}" value="{entry["value"]!r}" aria-label="{label}">'
-            f'<div><input type="number" min="{entry["min"]!r}" max="{entry["max"]!r}" step="any" value="{entry["value"]!r}" aria-label="{label}, as a number">{unit}</div>'
+            f'<div><input type="number" min="{entry["min"]!r}" max="{entry["max"]!r}" step="{fine}" value="{entry["value"]!r}" aria-label="{label}, as a number">{unit}</div>'
             f'<canvas aria-hidden="true"></canvas>{means}</div>'
         )
     # Pointing at a slider dims the drawing and lights that symbol in it.
@@ -183,7 +186,7 @@ def write(spec: dict, font: str = "sans") -> bytes:
         "sweep": spec["sweep"],
         "output": {"shown": output["shown"], "unit": output["unit"]},
         "symbols": [
-            {name: entry.get(name) for name in ("key", "name", "shown", "role", "value", "min", "max", "unit", "color")}
+            {name: entry.get(name) for name in ("key", "name", "shown", "role", "value", "min", "max", "step", "unit", "color")}
             for entry in spec["symbols"]
         ],
     }

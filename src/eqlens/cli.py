@@ -147,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         default=[],
         metavar="KEY=VALUE[:MIN:MAX[:UNIT]]",
-        help="with --bench: a symbol's number, and the range to explore, for example '\\sigma=1:0.2:3'; repeat for more",
+        help="with --bench: a symbol's number, and the range to explore, for example '\\sigma=1:0.2:3'; repeat for more. A symbol that moves in steps takes the step after its range: 'n=0:0:10/1'",
     )
     parser.add_argument("--sweep", metavar="KEY", help="with --bench: the symbol along the bottom of the plot")
     parser.add_argument(

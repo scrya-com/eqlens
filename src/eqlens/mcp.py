@@ -121,6 +121,7 @@ TOOLS = [
                             "value": {"type": "number"},
                             "min": {"type": "number"},
                             "max": {"type": "number"},
+                            "step": {"type": "number", "description": "For a symbol that moves in steps, such as a level n that is 0, 1, 2: the size of one step."},
                             "unit": {"type": "string"},
                             "means": {"type": "string", "description": "What it stands for here, under 60 characters."},
                         },
@@ -263,7 +264,7 @@ def bench_tool(args: dict) -> dict:
         "one_case_only": spec["case"],
         "sweep": next(entry["name"] for entry in spec["symbols"] if entry["key"] == spec["sweep"]),
         "symbols": [
-            {name: entry[name] for name in ("name", "key", "role", "value", "min", "max", "unit", "color") if name in entry}
+            {name: entry[name] for name in ("name", "key", "role", "value", "min", "max", "step", "unit", "color") if name in entry}
             for entry in spec["symbols"]
         ],
         "result_at_start": work_out(spec),

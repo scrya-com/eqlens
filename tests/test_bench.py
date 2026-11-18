@@ -607,5 +607,51 @@ class McpTests(unittest.TestCase):
             self.assertIn("derivative", refused["content"][0]["text"])
 
 
+
+class StepTests(unittest.TestCase):
+    TEX = r"E_n=\hbar\omega\left(n+\frac{1}{2}\right)"
+
+    def spec(self, n="n=0:0:10/1"):
+        from eqlens.bench.spec import build
+
+        return build(self.TEX, constant=["hbar"], sets=[r"\omega=1e15:1e14:5e15", n])
+
+    def test_a_stepped_symbol_is_worked_out_on_its_steps_only(self):
+        from eqlens.bench.spec import curve, load
+
+        spec = self.spec()
+        n = next(entry for entry in spec["symbols"] if entry["key"] == "n")
+        self.assertEqual(n["step"], 1.0)
+        xs, ys = curve(spec, "n")
+        self.assertEqual(xs, [float(i) for i in range(11)])
+        self.assertEqual(len(ys), 11)
+        self.assertNotIn("step", next(entry for entry in spec["symbols"] if entry["key"] == r"\omega"))
+        again = load(spec)
+        self.assertEqual(next(entry for entry in again["symbols"] if entry["key"] == "n")["step"], 1.0)
+
+    def test_the_value_and_the_top_land_on_a_step(self):
+        n = next(entry for entry in self.spec("n=2.4:0:9.5/1")["symbols"] if entry["key"] == "n")
+        self.assertEqual((n["value"], n["max"]), (2.0, 9.0))
+
+    def test_a_bad_step_is_refused(self):
+        from eqlens.engine import FormulaError
+
+        for bad in ("n=0:0:10/0", "n=0:0:10/x", "n=0:0:10/0.001", "n=0:0:10/50"):
+            with self.subTest(bad), self.assertRaises(FormulaError):
+                self.spec(bad)
+
+    def test_the_page_steps_its_slider_and_the_card_draws_dots(self):
+        from eqlens.bench import data
+        from eqlens.render import render_html
+
+        page = data(self.spec(), "page").decode("utf-8")
+        self.assertIn('step="1.0"', page)
+        self.assertIn('"step":1.0', page.replace(" ", ""))
+        card = render_html(self.TEX, legend=True, define=["n=the level"], constant=["hbar"], sets=[r"\omega=1e15:1e14:5e15", "n=0:0:10/1"])
+        cards = json.loads(re.search(r'class="eqlens-pops">(.*?)</script>', card, re.S).group(1))
+        n = next(item for item in cards if item["g"] == "n")
+        self.assertEqual((n["st"], len(n["ys"])), (1.0, 11))
+
+
 if __name__ == "__main__":
     unittest.main()

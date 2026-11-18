@@ -93,7 +93,7 @@ def write(spec: dict, card_png: bytes | None = None) -> bytes:
             bench.cell(row=row, column=4, value=entry["min"])
             bench.cell(row=row, column=5, value=entry["max"])
             rule = DataValidation(
-                type="decimal", operator="between", formula1=f"$D${row}", formula2=f"$E${row}",
+                type="whole" if entry.get("step") == 1 and float(entry["min"]).is_integer() else "decimal", operator="between", formula1=f"$D${row}", formula2=f"$E${row}",
                 errorStyle="warning", showErrorMessage=True,
                 errorTitle="Outside the range", error=f"{entry['shown']} is meant to stay between From and To.",
             )
@@ -134,15 +134,18 @@ def write(spec: dict, card_png: bytes | None = None) -> bytes:
             pass
 
     # ---- Sweeps: for each symbol, the result as it alone runs from From to To
+    count: dict[str, int] = {}
     for index, entry in enumerate(moving):
         column = 1 + 2 * index
         x_col, y_col = get_column_letter(column), get_column_letter(column + 1)
         sweeps.cell(row=1, column=column, value=entry["shown"]).font = bold
         sweeps.cell(row=1, column=column + 1, value=f"{output['shown']} as {entry['shown']} changes").font = bold
         row = where[entry["key"]]
-        for step in range(STEPS + 1):
+        # A symbol that moves in steps is swept on its steps and nowhere between.
+        count[entry["key"]] = round((entry["max"] - entry["min"]) / entry["step"]) if entry.get("step") else STEPS
+        for step in range(count[entry["key"]] + 1):
             at = 2 + step
-            sweeps.cell(row=at, column=column, value=f"=Bench!$D${row}+(Bench!$E${row}-Bench!$D${row})*{step}/{STEPS}")
+            sweeps.cell(row=at, column=column, value=f"=Bench!$D${row}+(Bench!$E${row}-Bench!$D${row})*{step}/{count[entry['key']]}")
             formula = to_excel(node, lambda key: f"{x_col}{at}" if key == entry["key"] else names[key])
             sweeps.cell(row=at, column=column + 1, value=f"=IFERROR({formula},NA())")
         sweeps.column_dimensions[x_col].width = 14
@@ -164,12 +167,19 @@ def write(spec: dict, card_png: bytes | None = None) -> bytes:
         # openpyxl 3.1 marks axes as deleted unless told otherwise, and Excel then draws none.
         chart.x_axis.delete = False
         chart.y_axis.delete = False
-        xs = Reference(sweeps, min_col=column, min_row=2, max_row=STEPS + 2)
-        ys = Reference(sweeps, min_col=column + 1, min_row=2, max_row=STEPS + 2)
+        xs = Reference(sweeps, min_col=column, min_row=2, max_row=count[entry["key"]] + 2)
+        ys = Reference(sweeps, min_col=column + 1, min_row=2, max_row=count[entry["key"]] + 2)
         line = Series(ys, xs, title=entry["shown"])
-        line.marker = Marker(symbol="none")
-        line.graphicalProperties.line.solidFill = entry["color"].lstrip("#").upper()
-        line.graphicalProperties.line.width = 28000
+        if entry.get("step"):
+            # Dots, and no line between them.
+            line.marker = Marker(symbol="circle", size=7)
+            line.marker.graphicalProperties.solidFill = entry["color"].lstrip("#").upper()
+            line.marker.graphicalProperties.line.solidFill = entry["color"].lstrip("#").upper()
+            line.graphicalProperties.line.noFill = True
+        else:
+            line.marker = Marker(symbol="none")
+            line.graphicalProperties.line.solidFill = entry["color"].lstrip("#").upper()
+            line.graphicalProperties.line.width = 28000
         line.smooth = False
         chart.series.append(line)
         # Where the bench stands now.
