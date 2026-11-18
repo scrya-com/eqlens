@@ -101,6 +101,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--no-credit", action="store_true", help="leave the small eqlens mark off an SVG card")
     parser.add_argument(
+        "--no-plot",
+        action="store_true",
+        help="html only: keep the words in the card under a symbol and leave the plot out. For a formula of matrices "
+        "or tensors, which reads as arithmetic but is not a curve",
+    )
+    parser.add_argument(
         "--no-pop",
         action="store_true",
         help="html only: leave out the card that opens under a symbol when it is pointed at. The card says what the "
@@ -335,8 +341,8 @@ def _render(tex: str, fmt: str, args) -> bytes:
     }
     if fmt == "html":
         # The daemon does not take these, so a drawing that needs them is made here.
-        extra = {"pop": not args.no_pop, "sets": args.set, "expr": args.expr, "solve": args.solve}
-        if args.no_pop or args.set or args.expr or args.solve:
+        extra = {"pop": False if args.no_pop else "words" if args.no_plot else True, "sets": args.set, "expr": args.expr, "solve": args.solve}
+        if args.no_pop or args.no_plot or args.set or args.expr or args.solve:
             return render(tex, fmt, **options, **extra)
     if not args.local and args.url and _healthy(args.url):
         data = _fetch(args.url, tex, fmt, options)

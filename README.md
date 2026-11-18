@@ -11,7 +11,9 @@
 <p align="center">
   One math formula, drawn as an SVG or a PNG.<br>
   Every symbol colored, named the way you say it, and lit up with its meaning when you point at it.<br>
+  On a web page a card opens under the symbol, with a moving plot of what it alone does to the result.<br>
   Then a bench to work it by hand: a page with sliders, a workbook, and an animation, in the same colors.<br>
+  It reads the formula aloud, draws it as a shader, and serves agents over MCP.<br>
   macOS and Ubuntu. No TeX install.
 </p>
 

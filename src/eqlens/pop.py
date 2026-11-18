@@ -45,6 +45,7 @@ def cards(
     sets: Sequence = (),
     expr: str | None = None,
     solve: str | None = None,
+    plot: bool = True,
 ) -> list[dict]:
     """One card per row, in row order: ``g`` the symbol, ``t`` its title, ``n`` its note, ``c`` its color.
 
@@ -52,7 +53,9 @@ def cards(
     (its range and where it stands), ``ys`` (the result across the range,
     None where there is none), ``out`` (what the result is called), and the
     units ``u`` and ``ou``. A constant has ``v``, its value. What the formula
-    gives has ``now``, the result where every symbol stands.
+    gives has ``now``, the result where every symbol stands. ``plot`` False
+    keeps the words and leaves the numbers out: for a formula of matrices or
+    tensors, which reads as arithmetic but is not a curve.
     """
     found = []
     for row in rows:
@@ -64,6 +67,8 @@ def cards(
             continue
         found.append({"g": glyph, "t": name if name and name != glyph else "", "n": plain(row.hint), "c": row.color or ""})
 
+    if not plot:
+        return found
     # Imported here: the bench imports the renderer, and the renderer imports this.
     from eqlens.bench.spec import build, curve, work_out
 

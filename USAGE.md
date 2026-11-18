@@ -95,7 +95,7 @@ eqlens --legend --define '\sigma=the spread' --set '\sigma=1:0.2:3' -o bell.html
   'f(x) = \frac{1}{\sigma\sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}'
 ```
 
-`--no-pop` leaves the cards out. The card's colors follow `--eq-pop-bg`, `--eq-pop-line`, `--eq-fg`, and `--eq-dim` if the page sets them.
+`--no-plot` keeps the words and leaves the plot out: use it for a formula of matrices or tensors, which reads as arithmetic but is not a curve. `--no-pop` leaves the cards out. The card's colors follow `--eq-pop-bg`, `--eq-pop-line`, `--eq-fg`, and `--eq-dim` if the page sets them.
 
 The fragment carries its own style and its scripts. The SVG and PNG have no script in them. In an SVG or PNG the tiers are always open.
 

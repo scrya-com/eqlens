@@ -94,7 +94,7 @@ def render(
     known: bool | None = None,
     constant: Sequence[str] = (),
     shared: Sequence[str] = (),
-    pop: bool = True,
+    pop: bool | str = True,
     sets: Sequence = (),
     expr: str | None = None,
     solve: str | None = None,
@@ -130,6 +130,8 @@ def render(
     (``html`` only, on by default) opens a small card under a symbol that is
     pointed at, focused, or tapped: its name, its meaning, and, when the formula
     can be worked out, a plot of the result as that symbol alone changes.
+    ``pop="words"`` keeps the words and leaves the plot out, for a formula of
+    matrices or tensors.
     ``sets``, ``expr``, and ``solve`` are for that plot and mean what they mean
     to a bench: a number and a range for a symbol, one case of a formula that
     cannot be read as written, and the symbol to solve for. ``font`` is one of ``sans``, ``serif``,
@@ -176,7 +178,7 @@ def render(
             )
             pops = embed(cards(
                 text[1:-1].strip(), rows, define=own, tier=tier, constant=constant, shared=shared,
-                sets=sets, expr=expr, solve=solve,
+                sets=sets, expr=expr, solve=solve, plot=pop != "words",
             ))
         return _html(text[1:-1].strip(), shut, wide, pops).encode("utf-8")
 

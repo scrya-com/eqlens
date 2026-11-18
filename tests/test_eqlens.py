@@ -760,6 +760,11 @@ class PopTests(unittest.TestCase):
         self.assertIsNone(self.cards(off))
         self.assertNotIn("__eqlensPop", off)
 
+    def test_words_only_leaves_the_plot_out(self):
+        cards = self.cards(render_html(self.GAUSS, legend=True, define=[r"\sigma=the spread"], pop="words"))
+        self.assertFalse(any("ys" in card or "now" in card for card in cards))
+        self.assertIn("the spread", [card["n"] for card in cards])
+
     def test_card_text_cannot_close_its_script(self):
         page = render_html(r"a+b", define=["a=</script><b>x"])
         self.assertEqual(page.count("</script>"), 3)
