@@ -169,9 +169,17 @@ The tests draw some fifty formulas from physics, quantum physics, and machine le
 
 A pane for the formulas. The terminal paints the PNG. The mod keeps the path.
 
+```
+/plugin install eqlens --marketplace scrya-com/eqlens
+```
+
+Or load it from a checkout for one session:
+
 ```bash
 claude --plugin-dir /path/to/eqlens
 ```
+
+With the eqlens MCP server also connected, the pane follows it: each PNG that `eqlens_render` draws shows in the pane too.
 
 ```
 /eqlens

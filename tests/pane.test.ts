@@ -30,6 +30,7 @@ function stub(
     eqlens = { exitCode: 0, stdout: PNG + '\n', stderr: '' } as
       | { exitCode: number; stdout: string; stderr: string }
       | { missing: true },
+    taken = false,
   } = {},
 ) {
   const saved: { key: string; value: unknown }[] = []
@@ -40,7 +41,11 @@ function stub(
     return { value: undefined }
   })
   on('command.register', () => ({ value: undefined }))
-  on('tool.register', () => ({ value: { tool: 'mcp__eqlens__show' } }))
+  on('tool.register', () => {
+    if (taken) throw new Error('the session already has an MCP server named "eqlens"')
+    return { value: { tool: 'mcp__eqlens__show' } }
+  })
+  if (taken) on('tool.call', () => ({ result: 'drawn by the server' }))
   on('fs.exists', () => ({ value: true }))
   on('fs.stat', () => ({ value: { kind: 'file', size: 12, mtimeMs: 1700000000000, isLink: false } }))
   on('fs.read', () => ({ value: { base64: pngHeader(800, 100) } }))
@@ -100,6 +105,8 @@ test('draws a formula and shows that file', async ($, on) => {
       tex: 'e^{i\\pi}+1=0',
       legend: false,
       notes: [],
+      defines: [],
+      tiers: [],
       width: 800,
       height: 100,
     },
@@ -147,7 +154,7 @@ test('refuses a flag the pane does not take', async ($, on) => {
   const { argv } = stub(on)
   await start($)
   const result = await $.command.run({ command: 'eqlens', args: '--color #fff x=1' })
-  expect(result.text).toBe('The pane takes the formula, --legend, and --note.')
+  expect(result.text).toBe('The pane takes the formula, --legend, --define, --tier, and --note.')
   expect(argv.some((row) => row[0] === 'eqlens')).toBe(false)
 })
 
@@ -179,4 +186,23 @@ test('uses ~/.local/bin/eqlens when the name is not on PATH', async ($, on) => {
   const result = await $.command.run({ command: 'eqlens', args: 'x=1' })
   expect(result.text).toBe('Drew x=1')
   expect(argv.some((row) => row[0] === '/Users/ada/.local/bin/eqlens')).toBe(true)
+})
+
+test('follows the eqlens MCP server when it holds the tool names', async ($, on) => {
+  const { saved, argv } = stub(on, { taken: true })
+  await start($)
+  const typed = await $.command.run({ command: 'eqlens', args: 'x=1' })
+  expect(typed.text).toBe('Drew x=1')
+  const result = await $.tool.call({
+    tool: 'mcp__eqlens__eqlens_render',
+    tool_use_id: 'u2',
+    tex: 'E=mc^2',
+    define: ['E=energy'],
+  })
+  expect(result.result).toBe('drawn by the server')
+  const draw = argv.filter((row) => row[0] === 'eqlens').pop()
+  expect(draw).toContain('--define')
+  expect(draw?.[draw.length - 1]).toBe('E=mc^2')
+  const stored = saved.filter((row) => row.key === 'entries').pop()
+  expect(Array.isArray(stored?.value) && stored.value.map((row) => row.tex)).toEqual(['x=1', 'E=mc^2'])
 })

@@ -7,6 +7,7 @@ const PANE = 'eqlens'
 const STORE = 'entries'
 const DIR = '/tmp/eqlens-pane'
 const SHOW = 'mcp__eqlens__show'
+const RENDER = 'mcp__eqlens__eqlens_render'
 
 let entries = []
 let index = 0
@@ -20,33 +21,39 @@ export function register(on) {
       argumentHint: '[formula | --legend | --define | --tier | --note | drop]',
       immediate: true,
     })
-    await $.tool.register({
-      name: 'show',
-      description: 'Draw one mathtext formula and show the PNG in the eqlens pane.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          tex: { type: 'string', description: 'One formula. No preamble.' },
-          legend: { type: 'boolean', description: 'Color Greek letters and add the English-name ledger.' },
-          defines: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'What a symbol means here, as KEY=meaning, for example "P=what one token can carry".',
+    // A session that runs the eqlens MCP server already owns the mcp__eqlens__ names.
+    // The pane and the command still work: the pane then follows that server's drawings.
+    try {
+      await $.tool.register({
+        name: 'show',
+        description: 'Draw one mathtext formula and show the PNG in the eqlens pane.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            tex: { type: 'string', description: 'One formula. No preamble.' },
+            legend: { type: 'boolean', description: 'Color Greek letters and add the English-name ledger.' },
+            defines: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'What a symbol means here, as KEY=meaning, for example "P=what one token can carry".',
+            },
+            tiers: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'What a symbol is made of, as KEY=formula, for example "P=A_eA_e^\\top". Drawn under its row.',
+            },
+            notes: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Short fine-print lines under the formula.',
+            },
           },
-          tiers: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'What a symbol is made of, as KEY=formula, for example "P=A_eA_e^\\top". Drawn under its row.',
-          },
-          notes: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Short fine-print lines under the formula.',
-          },
+          required: ['tex'],
         },
-        required: ['tex'],
-      },
-    })
+      })
+    } catch {
+      // The server's eqlens_render stands in for the show tool.
+    }
     await load($)
     return next(e)
   })
@@ -66,6 +73,31 @@ export function register(on) {
     const text = await draw($, jobFromTool(e))
     await present($)
     return { result: text }
+  })
+
+  on('tool.call', { tool: RENDER }, async ($, e, next) => {
+    const result = await next(e)
+    try {
+      const input = e.input && typeof e.input === 'object' ? e.input : e
+      if (input.format === undefined || input.format === 'png') {
+        const job = jobFromTool({
+          input: {
+            tex: input.tex,
+            legend: input.legend === true || input.brief === true,
+            defines: input.define,
+            tiers: input.tier,
+            notes: input.notes,
+          },
+        })
+        if (!job.error) {
+          await draw($, job)
+          await present($)
+        }
+      }
+    } catch {
+      // The server's answer stands whether or not the pane showed it.
+    }
+    return result
   })
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {

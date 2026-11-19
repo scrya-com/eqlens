@@ -1,7 +1,7 @@
 {
   "name": "eqlens",
   "displayName": "eqlens",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Draw a formula and show the PNG in a pane, and build a bench for it over MCP",
   "author": { "name": "John D. Pope" },
   "license": "Do No Harm",
