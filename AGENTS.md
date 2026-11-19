@@ -17,7 +17,7 @@ Whenever a feature lands or improves, these are part of the same piece of work:
 2. **Show it live.** On the page a feature is something the visitor can use at once, not a description of it.
    The formula at the top must exercise the newest feature.
 3. **Keep the order in step.** The `best` list in `eqlens.astro`, the order of its chapters, the README
-   opening, and `public/llms.txt` / `llms-full.txt` say the same thing in the same order.
+   opening, and `web/llms.txt` / `llms-full.txt` say the same thing in the same order.
 4. **Redraw and ship.** After changing how eqlens draws, run `python3 website/build-eq.py` in
    `worldwide-scrya` so every equation on the site is redrawn, then commit, push, and deploy the site (its
    `CLAUDE.md` has the steps). A change that is pushed but not live is not finished.
@@ -28,8 +28,9 @@ Pushing a feature to this repository is half the job. In the same piece of work,
 
 1. Add the feature to `website/src/pages/eqlens.astro` in `worldwide-scrya`, in the place rule 1 above gives
    it, with something the visitor can see or copy: the command, and what it prints or draws.
-2. Bring `website/public/llms.txt` and `llms-full.txt` in step, and run `python3 website/build-eq.py` if the
-   drawing changed.
+2. Bring `llms.txt` and `llms-full.txt` in step, in both `web/` and `website/public/`: the build copies the
+   `web/` ones over the others, so `web/` is what is served. Run `python3 website/build-eq.py` if the drawing
+   changed.
 3. Commit the site by file name (other sessions work in that repository: never `git add -A`, never stash or
    restore their files), push, deploy, and check https://scrya.com/eqlens/ shows the feature. The `deploy`
    skill has the steps.
