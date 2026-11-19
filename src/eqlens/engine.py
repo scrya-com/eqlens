@@ -276,6 +276,22 @@ def to_svg(
 
 def to_png(scene: Scene, *, dpi: int, fg: str, bg: str | None) -> bytes:
     """Fill the same outlines the SVG uses."""
+    with LOCK:
+        figure = _painted(scene, dpi, fg, bg)
+        out = io.BytesIO()
+        figure.savefig(out, format="png", dpi=dpi, transparent=not bg, facecolor=bg or "none")
+    return out.getvalue()
+
+
+def to_rgba(scene: Scene, *, dpi: float, fg: str) -> np.ndarray:
+    """The same picture as rows of RGBA pixels on a clear ground, for a text drawing."""
+    with LOCK:
+        figure = _painted(scene, dpi, fg, None)
+        figure.canvas.draw()
+        return np.asarray(figure.canvas.buffer_rgba()).copy()
+
+
+def _painted(scene: Scene, dpi: float, fg: str, bg: str | None) -> Figure:
     colors = dict(ROLES, fg=fg)
     by_color: dict[str, list[Path]] = {}
     for group in scene.groups:
@@ -286,22 +302,19 @@ def to_png(scene: Scene, *, dpi: int, fg: str, bg: str | None) -> bytes:
         for x, y, w, h, fill in group.rules:
             corners = [(x, y), (x + w, y), (x + w, y + h), (x, y + h), (x, y)]
             by_color.setdefault(colors.get(fill, fill), []).append(Path(corners, closed=True))
-    with LOCK:
-        figure = Figure(figsize=(scene.width / 72, scene.height / 72), dpi=dpi)
-        FigureCanvasAgg(figure)
-        if bg:
-            figure.patch.set_facecolor(bg)
-        else:
-            figure.patch.set_alpha(0)
-        axes = figure.add_axes((0, 0, 1, 1))
-        axes.axis("off")
-        axes.set_xlim(0, scene.width)
-        axes.set_ylim(scene.height, 0)
-        for color, paths in by_color.items():
-            axes.add_patch(PathPatch(Path.make_compound_path(*paths), facecolor=color, edgecolor="none", linewidth=0))
-        out = io.BytesIO()
-        figure.savefig(out, format="png", dpi=dpi, transparent=not bg, facecolor=bg or "none")
-    return out.getvalue()
+    figure = Figure(figsize=(scene.width / 72, scene.height / 72), dpi=dpi)
+    FigureCanvasAgg(figure)
+    if bg:
+        figure.patch.set_facecolor(bg)
+    else:
+        figure.patch.set_alpha(0)
+    axes = figure.add_axes((0, 0, 1, 1))
+    axes.axis("off")
+    axes.set_xlim(0, scene.width)
+    axes.set_ylim(scene.height, 0)
+    for color, paths in by_color.items():
+        axes.add_patch(PathPatch(Path.make_compound_path(*paths), facecolor=color, edgecolor="none", linewidth=0))
+    return figure
 
 
 def _fill(fill: str) -> str:

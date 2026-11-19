@@ -44,7 +44,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--color", default="#f2f2f7")
     parser.add_argument("--bg", default=None, help='opaque background such as #1c1c1e, or "transparent"')
     parser.add_argument("--font", choices=sorted(FONTS), default="sans", help="sans (default), serif, stix, or cm")
-    parser.add_argument("--display", choices=["auto", "iterm", "kitty", "file"], default="auto")
+    parser.add_argument(
+        "--display",
+        choices=["auto", "iterm", "kitty", "text", "cells", "file"],
+        default="auto",
+        help="text draws the formula in braille dots, for a terminal that cannot paint a picture; "
+        "auto does that too, and then writes the file. cells prints the same drawing as JSON",
+    )
+    parser.add_argument("--columns", type=int, default=None, help="with --display text: how wide to draw. Default: the terminal")
     parser.add_argument(
         "--legend",
         action="store_true",
@@ -257,6 +264,14 @@ def main(argv: list[str] | None = None) -> int:
             done = _bench(tex, args, {})
             if done or not args.output:
                 return done
+        # A terminal with no picture protocol still gets to see the formula, in dots, above the file's path.
+        plain = args.display == "auto" and mode == "file" and not args.output and sys.stdout.isatty()
+        if mode in ("text", "cells") or (plain and fmt in ("svg", "png")):
+            shown = _text(tex, args, mode)
+            if mode in ("text", "cells"):
+                print(shown, end="")
+                return 0
+            print(shown)
         data = _render(tex, fmt, args)
     except FormulaError as exc:
         print(f"eqlens: {exc}", file=sys.stderr)
@@ -274,6 +289,25 @@ def main(argv: list[str] | None = None) -> int:
     else:
         display_png(data, mode, sys.stdout.buffer)
     return 0
+
+
+def _text(tex: str, args, mode: str) -> str:
+    """The formula in braille dots with its ledger in words, or the same as JSON for ``cells``."""
+    import shutil
+
+    from eqlens.text import ansi, cells
+
+    columns = args.columns if args.columns is not None else max(20, min(400, shutil.get_terminal_size().columns - 1))
+    found = cells(
+        tex, columns=columns, legend=args.legend, brief=args.brief, define=args.define, tier=args.tier,
+        constant=args.constant, shared=args.shared, notes=args.note, font=args.font,
+    )
+    if mode == "cells":
+        return json.dumps(found, ensure_ascii=False) + "\n"
+    shown = ansi(found, color=sys.stdout.isatty() and not os.environ.get("NO_COLOR"))
+    if not found["fits"]:
+        shown += "\n  Drawn small to fit. A wider terminal draws it larger.\n"
+    return shown
 
 
 def _bench(tex: str | None, args, asked: dict) -> int:

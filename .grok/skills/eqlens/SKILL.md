@@ -35,7 +35,7 @@ The person can type the same thing:
 
 1. If stdout is the user's iTerm2, WezTerm, or Kitty, run `eqlens '<tex>'`. It draws a PNG inline: a terminal cannot paint an SVG.
 2. If stdout is a captured tool shell, do not run bare `eqlens`. It writes the SVG text into the capture. Run `eqlens -o <path>.svg '<tex>'`, or `-o <path>.png` when the user will look at it in a terminal. It prints the absolute path. For a PNG give the user `! imgcat <absolute path>`; for an SVG tell them the full path to open in a browser. Always the full path, starting at `/`. Never shorten it, use `~`, or give a relative path or a bare filename.
-3. On a terminal with no inline images (Ubuntu GNOME Terminal and most Linux consoles), `eqlens '<tex>'` writes an SVG and prints its path. Tell the user the full absolute path.
+3. On a terminal with no inline images (Ubuntu GNOME Terminal and most Linux consoles), `eqlens '<tex>'` draws the formula in braille dots, then writes an SVG and prints its path. Tell the user the full absolute path. `eqlens --display text '<tex>'` prints the dots alone; in a captured tool shell, give the user that line to run with `!`.
 4. If `eqlens` is missing: `python3 -m pip install matplotlib` and `python3 -m pip install "git+https://github.com/scrya-com/eqlens.git"`. From a checkout, `python3 -m pip install .` Then `eqlens` is on `PATH` (often `~/.local/bin`). `mathcat` still works as an old name for the same command.
 
 One formula per call. `$...$` wrappers are optional.

@@ -710,6 +710,47 @@ class GlslTests(unittest.TestCase):
                     os.remove(path)
 
 
+class TextTests(unittest.TestCase):
+    def test_draws_the_formula_in_dots_with_the_ledger_in_words(self):
+        from eqlens.text import ansi, cells
+
+        found = cells(r"e^{i\pi}+1=0", columns=80, legend=True, notes=["A note."])
+        self.assertTrue(found["fits"])
+        ink = "".join(text for line in found["picture"] for text, _tint in line)
+        self.assertTrue(any(0x2800 < ord(ch) <= 0x28FF for ch in ink))
+        self.assertTrue(all(len("".join(text for text, _tint in line)) <= 80 for line in found["picture"]))
+        row = next(row for row in found["ledger"] if row["glyph"] == "π")
+        self.assertEqual(row["words"], "pi")
+        # Pi keeps its ledger color in the drawing, and plain ink carries none.
+        tints = {tint for line in found["picture"] for _text, tint in line}
+        self.assertIn(row["color"], tints)
+        self.assertIn(None, tints)
+        shown = ansi(found)
+        self.assertIn("\033[38;2;", shown)
+        self.assertNotIn("\033", ansi(found, color=False))
+        self.assertIn("A note.", shown)
+
+    def test_a_long_formula_is_drawn_smaller_and_says_so(self):
+        from eqlens.text import cells
+
+        found = cells(r"W_c=\left(Z_c^TZ_c+\lambda n_cI\right)^{-1}Z_c^TY_c+a+b+c+d+e+f+g+h", columns=40)
+        self.assertFalse(found["fits"])
+        self.assertTrue(all(len("".join(text for text, _tint in line)) <= 40 for line in found["picture"]))
+        with self.assertRaises(FormulaError):
+            cells("x=1", columns=5)
+
+    def test_the_command_prints_dots_or_json(self):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(main(["--display", "text", "--columns", "50", "--legend", r"e^{i\pi}+1=0"]), 0)
+        self.assertIn("pi", out.getvalue())
+        self.assertNotIn("\033", out.getvalue())
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(main(["--display", "cells", "--columns", "50", "x=1"]), 0)
+        self.assertEqual(json.loads(out.getvalue())["tex"], "x=1")
+
+
 class PopTests(unittest.TestCase):
     GAUSS = r"f(x) = \frac{1}{\sigma\sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}"
 

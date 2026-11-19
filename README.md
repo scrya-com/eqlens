@@ -14,6 +14,7 @@
   On a web page a card opens under the symbol, with a moving plot of what it alone does to the result.<br>
   Then a bench to work it by hand: a page with sliders, a workbook, and an animation, in the same colors.<br>
   It reads the formula aloud, draws it as a shader, and serves agents over MCP.<br>
+  In a plain terminal it draws the formula in braille dots, each symbol in its color.<br>
   macOS and Ubuntu. No TeX install.
 </p>
 
@@ -190,7 +191,7 @@ With the eqlens MCP server also connected, the pane follows it: each PNG that `e
 
 `/eqlens` opens the pane. A formula is drawn and kept. Prev, Next, and Drop walk that list. `--legend`, `--define`, and `--note` are the same flags as the command line.
 
-Ghostty or kitty, and Claude Code 2.1.287 or later. On another surface the pane shows the formula and the path.
+Ghostty, kitty, or iTerm2 paints the PNG, with Claude Code 2.1.287 or later. Any other terminal, GNOME Terminal among them, gets the formula in braille dots with the ledger in words under it. A narrow window holds the pane back until you type `/eqlens`.
 
 ## For an LLM
 

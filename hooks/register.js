@@ -1,7 +1,7 @@
 // eqlens: draw a formula to a PNG and show that file in a pane.
 // The terminal reads the file. This module keeps the path.
 
-import { cellBox, drawArgv, parse, pngSize, screenPng } from './formula.js'
+import { cellBox, cellsArgv, drawArgv, paints, parse, pngSize, screenCells, screenPng } from './formula.js'
 
 const PANE = 'eqlens'
 const STORE = 'entries'
@@ -12,6 +12,9 @@ const RENDER = 'mcp__eqlens__eqlens_render'
 let entries = []
 let index = 0
 let note = ''
+// False in a terminal that cannot paint a PNG: the pane then draws the formula in braille dots.
+let pixels = true
+let room = 60
 
 export function register(on) {
   on('session.start', async ($, e, next) => {
@@ -54,6 +57,7 @@ export function register(on) {
     } catch {
       // The server's eqlens_render stands in for the show tool.
     }
+    pixels = await canPaint($)
     await load($)
     return next(e)
   })
@@ -104,9 +108,12 @@ export function register(on) {
     if (e.requestId !== PANE) return next(e)
     const { Box, Text, Button, Input, Image } = $.ui.resolve(e)
     const current = entries[index]
+    if (e.props.bodyColumns > 0) room = e.props.bodyColumns
     const fitted = current ? cellBox(e.props.bodyColumns, current.width, current.height) : null
-    const picture =
-      current && e.surface === 'terminal' && Image
+    const dots = current && e.surface === 'terminal' && !pixels && current.cells ? current.cells : null
+    const picture = dots
+      ? Box({ key: 'dots', flexDirection: 'column', children: dotLines(Text, dots) })
+      : current && e.surface === 'terminal' && pixels && Image
         ? Image({
             key: 'view',
             source: { file: current.path, format: 'png', generation: current.generation },
@@ -149,7 +156,60 @@ export function register(on) {
 }
 
 async function present($) {
-  await $.ui.open({ id: PANE, title: 'eqlens', focus: true, closeOnEscape: true, rows: 28 })
+  await fill($)
+  const opened = await $.ui.open({ id: PANE, title: 'eqlens', focus: true, closeOnEscape: true, rows: 28 })
+  // A narrow window holds the pane back until it is asked for.
+  if (opened && opened.isPlaced === false) await $.ui.toast('eqlens drew it. Type /eqlens to see it.')
+}
+
+async function canPaint($) {
+  const read = async (get) => {
+    try {
+      return (await get()) || ''
+    } catch {
+      return ''
+    }
+  }
+  return paints({
+    TERM: await read(() => $.env.get('TERM')),
+    TERM_PROGRAM: await read(() => $.env.get('TERM_PROGRAM')),
+    KITTY_WINDOW_ID: await read(() => $.env.get('KITTY_WINDOW_ID')),
+  })
+}
+
+// The formula in dots, for the entry showing. Nothing to do where the terminal paints the PNG.
+async function fill($) {
+  const current = entries[index]
+  if (pixels || !current || current.cells) return
+  const found = await dotsFor($, current)
+  if (!found) return
+  current.cells = found
+  await save($)
+  $.ui.invalidate('ui.render')
+}
+
+async function dotsFor($, job) {
+  const argv = cellsArgv(room - 2, { ...job, notes: job.notes || [] })
+  const ran = await runEqlens($, argv.slice(1))
+  if (ran.error || ran.exitCode !== 0) return null
+  return screenCells(ran.stdout)
+}
+
+function dotLines(Text, cells) {
+  const run = (text, color, key) => Text({ key, wrap: 'clip', ...(color ? { color } : {}), children: [text] })
+  const lines = cells.picture.map((line, i) =>
+    Text({ key: 'p' + i, wrap: 'clip', children: line.length ? line.map((part, j) => run(part[0], part[1], 'r' + j)) : [' '] }),
+  )
+  if (cells.ledger.length) lines.push(Text({ key: 'gap', children: [' '] }))
+  const wide = Math.max(0, ...cells.ledger.map((row) => row.glyph.length))
+  cells.ledger.forEach((row, i) =>
+    lines.push(
+      Text({ key: 'l' + i, children: [run(row.glyph.padEnd(wide + 2), row.color, 'g'), row.words] }),
+    ),
+  )
+  cells.notes.forEach((line, i) => lines.push(Text({ key: 'n' + i, dimColor: true, children: [line] })))
+  if (!cells.fits) lines.push(Text({ key: 'small', dimColor: true, children: ['Drawn small to fit. A wider pane draws it larger.'] }))
+  return lines
 }
 
 async function load($) {
@@ -231,6 +291,10 @@ async function draw($, job) {
     tiers: job.tiers || [],
     width: size ? size.width : 0,
     height: size ? size.height : 0,
+  }
+  if (!pixels) {
+    const found = await dotsFor($, entry)
+    if (found) entry.cells = found
   }
   const found = entries.findIndex((item) => same(item, entry))
   if (found >= 0) {
@@ -322,6 +386,7 @@ async function shift($, by) {
   note = ''
   await save($)
   $.ui.invalidate('ui.render')
+  await fill($)
 }
 
 async function remove($) {

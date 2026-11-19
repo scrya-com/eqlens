@@ -31,6 +31,8 @@ function stub(
       | { exitCode: number; stdout: string; stderr: string }
       | { missing: true },
     taken = false,
+    term = 'xterm-kitty',
+    cells = '',
   } = {},
 ) {
   const saved: { key: string; value: unknown }[] = []
@@ -54,10 +56,11 @@ function stub(
   on('ui.render', () => ({ type: 'Text', props: {}, children: [''] }))
   on('session.start', () => ({ cwd: '/work' }))
   on('clock.now', () => ({ value: 1700000000000 }))
-  on('env.get', () => ({ value: '/Users/ada' }))
+  on('env.get', (_$, e) => ({ value: e.name === 'HOME' ? '/Users/ada' : e.name === 'TERM' ? term : '' }))
   on('process.run', (_$, e) => {
     argv.push([...e.argv])
     if (e.argv[0] === 'mkdir') return { value: { exitCode: 0, stdout: '', stderr: '' } }
+    if (cells && e.argv.includes('cells')) return { value: { exitCode: 0, stdout: cells, stderr: '' } }
     if ('missing' in eqlens && e.argv[0] === 'eqlens') return { deny: 'not found' }
     if ('missing' in eqlens) return { value: { exitCode: 0, stdout: PNG + '\n', stderr: '' } }
     return { value: eqlens }
@@ -205,4 +208,27 @@ test('follows the eqlens MCP server when it holds the tool names', async ($, on)
   expect(draw?.[draw.length - 1]).toBe('E=mc^2')
   const stored = saved.filter((row) => row.key === 'entries').pop()
   expect(Array.isArray(stored?.value) && stored.value.map((row) => row.tex)).toEqual(['x=1', 'E=mc^2'])
+})
+
+test('draws the formula in dots where the terminal cannot paint a picture', async ($, on) => {
+  const cells = JSON.stringify({
+    tex: 'x=1',
+    picture: [[['⠰⠶', null], ['⢿⣿', '#3fb950']]],
+    ledger: [{ glyph: 'x', color: '#3fb950', words: 'the unknown' }],
+    notes: [],
+    fits: true,
+  })
+  const { saved, argv } = stub(on, { term: 'xterm-256color', cells })
+  await start($)
+  const result = await $.command.run({ command: 'eqlens', args: 'x=1' })
+  expect(result.text).toBe('Drew x=1')
+  const asked = argv.find((row) => row.includes('cells'))
+  expect(asked?.slice(0, 6)).toEqual(['eqlens', '--local', '--display', 'cells', '--columns', '58'])
+  const stored = saved.filter((row) => row.key === 'entries').pop()
+  expect(Array.isArray(stored?.value) && stored.value[0].cells.ledger[0].words).toBe('the unknown')
+  const ui = await pane($)
+  expect(await ui.find({ key: 'view' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /⢿⣿/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /the unknown/ })).toBeDefined()
+  await ui.unmount()
 })

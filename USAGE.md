@@ -211,6 +211,19 @@ For Claude Desktop or another client, the entry is `{"mcpServers": {"eqlens": {"
 
 The server asks no model and needs no key. When a formula cannot be read as written, `eqlens_bench` answers with the reason, and the model calls again with `expr` and `symbols` for one case.
 
+## A terminal that cannot paint a picture
+
+GNOME Terminal and most Linux consoles show text only. There the formula is drawn in braille dots, two across and four down in each character, and each symbol keeps its ledger color. The ledger and the notes are plain lines under it.
+
+```bash
+eqlens --legend 'e^{i\pi}+1=0'                    # the dots, then the path of the SVG it wrote
+eqlens --display text --legend 'e^{i\pi}+1=0'     # the dots alone, in any terminal
+eqlens --display text --columns 60 'E=mc^2'       # no wider than 60 characters
+eqlens --display cells 'E=mc^2'                   # the same drawing as JSON, for a program
+```
+
+Plain ink is left in the terminal's own text color, so it reads on a light theme and a dark one. A long formula is drawn smaller to fit the width, and past a point small is hard to read: widen the window, or open the file. `NO_COLOR` turns the colors off. Tiers are not drawn in dots.
+
 ## Hover
 
 Open the SVG in a browser, or put it inline in a page. Point at a symbol: every place it appears lights up with its ledger row, and the rest dims. Point at a ledger row and the formula shows where that symbol is. No script is involved, only CSS inside the SVG.

@@ -73,6 +73,51 @@ export function drawArgv(path, job) {
   return argv
 }
 
+// The same formula as lines of colored text, for a terminal that cannot paint a picture.
+export function cellsArgv(columns, job) {
+  const argv = drawArgv('', job)
+  const wide = Math.max(20, Math.min(400, Math.floor(columns) || 60))
+  argv.splice(2, 2, '--display', 'cells', '--columns', String(wide))
+  return argv
+}
+
+// Kitty, Ghostty, iTerm2 and WezTerm paint a PNG. GNOME Terminal and most others do not.
+export function paints(env) {
+  const program = String(env.TERM_PROGRAM || '').toLowerCase()
+  const term = String(env.TERM || '').toLowerCase()
+  if (env.KITTY_WINDOW_ID || term.includes('kitty') || term.includes('ghostty')) return true
+  return program === 'iterm.app' || program === 'ghostty' || program === 'wezterm'
+}
+
+// What eqlens --display cells printed, kept only if it has the shape the pane draws.
+export function screenCells(text) {
+  let found
+  try {
+    found = JSON.parse(String(text ?? ''))
+  } catch {
+    return null
+  }
+  if (!found || !Array.isArray(found.picture) || found.picture.length > 200) return null
+  const tint = (value) => (typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : null)
+  const picture = []
+  for (const line of found.picture) {
+    if (!Array.isArray(line)) return null
+    const runs = []
+    for (const run of line) {
+      if (!Array.isArray(run) || typeof run[0] !== 'string') return null
+      runs.push([run[0].slice(0, 400), tint(run[1])])
+    }
+    picture.push(runs)
+  }
+  const ledger = (Array.isArray(found.ledger) ? found.ledger : []).slice(0, 40).map((row) => ({
+    glyph: String((row && row.glyph) ?? '').slice(0, 80),
+    color: tint(row && row.color),
+    words: String((row && row.words) ?? '').slice(0, 600),
+  }))
+  const notes = (Array.isArray(found.notes) ? found.notes : []).slice(0, 12).map((note) => String(note).slice(0, 600))
+  return { picture, ledger, notes, fits: found.fits !== false }
+}
+
 export function cellBox(bodyColumns, width, height) {
   const columns = Math.min(255, Math.max(1, bodyColumns || 80))
   if (!width || !height) return { columns, rows: 6 }
