@@ -546,7 +546,7 @@ class McpTests(unittest.TestCase):
         self.assertEqual(newer["result"]["protocolVersion"], "2025-06-18")
         self.assertIsNone(handle({"jsonrpc": "2.0", "method": "notifications/initialized"}))
         tools = handle({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]
-        self.assertEqual([tool["name"] for tool in tools], ["eqlens_render", "eqlens_comment", "eqlens_inspect", "eqlens_bench"])
+        self.assertEqual([tool["name"] for tool in tools], ["eqlens_render", "eqlens_comment", "eqlens_diagram", "eqlens_inspect", "eqlens_bench"])
         for tool in TOOLS:
             self.assertEqual(tool["inputSchema"]["type"], "object")
             self.assertEqual(tool["inputSchema"]["required"], ["tex"])

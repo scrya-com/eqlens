@@ -207,6 +207,7 @@ For Claude Desktop or another client, the entry is `{"mcpServers": {"eqlens": {"
 |---|---|
 | `eqlens_render` | Draws a formula as PNG, SVG, or HTML. Returns the path, and the picture for a PNG. |
 | `eqlens_comment` | Draws the formula in braille dots as a comment block. Returns the text, or with `file` and `write` puts it at the head of that file. |
+| `eqlens_diagram` | Gives the formula's flow as a Mermaid flowchart in the same colors. Says `fits: false`, and why, when a diagram would add nothing. |
 | `eqlens_inspect` | Lists the symbols, says whether the formula works out as written, and gives each symbol's plain name. |
 | `eqlens_bench` | Writes the page, the workbook, the scene, and the spec. Default: the page and the workbook, in a temporary folder; `out_dir` says where to keep them. |
 
@@ -249,6 +250,49 @@ eqlens --comment '//' --width 60 'F=ma'   # by comment mark, no line longer than
 `--burn` puts the block at the head of the file, under a `#!` line when there is one. Burn the same formula again and its block is replaced where it stands, not added twice. The file's ending picks the comment marks: `#`, `//`, `--`, `%`, `;`, `!`, `/* */`, or `<!-- -->`. For a file with an ending eqlens does not know, give `--comment` a mark as well. The file must already exist. From Python: `eqlens.text.comment(tex, "py")` and `eqlens.text.burn(path, tex)`.
 
 Keep the formula short. A long one is drawn small to fit 78 characters and reads badly in dots.
+
+## A diagram of the formula
+
+Some formulas are easier to follow as a picture of what goes in, what is done, and what comes out. `--diagram` prints that as a [Mermaid](https://mermaid.js.org) flowchart. Each symbol is a box in the color the drawing gives it, so a page can show both and the reader matches them by eye.
+
+```bash
+eqlens --diagram plain --define 'm=the mass' 'E = \frac{1}{2} m v^2 + m g h'
+eqlens --diagram dark -o flow.md "L_0' = \mathrm{Conv}_\theta(L_0, L_1, C_0),\quad S' = (C_6, C_7)"
+```
+
+```mermaid
+flowchart LR
+  n0(["add"])
+  n1(["times 1/2"])
+  n2["m"]:::c0
+  n3(["square"])
+  n4["v"]
+  n5(["multiply"])
+  n6["g"]
+  n7["h"]
+  n8[["E"]]
+  n2 --> n1
+  n4 --> n3
+  n3 --> n1
+  n1 --> n0
+  n2 --> n5
+  n6 --> n5
+  n7 --> n5
+  n5 --> n0
+  n0 --> n8
+  classDef c0 stroke:#ffa657,stroke-width:2px
+```
+
+`dark` is made for the eqlens ground, `light` for a white page, and `plain` has no theme and no fills, for a page that sets its own (GitHub draws it in both its themes). `--direction TB` runs it top to bottom. `-o` writes the source to a file, as a fenced block when the file ends in `.md`.
+
+Two kinds of formula are drawn:
+
+- **Steps.** A formula that can be worked out, such as the one above. Each operation is a rounded box. A symbol used twice is one box.
+- **Calls.** A formula that names what is done: `OUT = \mathrm{Name}(a, b, ...)`. Several statements, set apart by commas or `\quad`, share one picture, and a result that is used again is one box. `C_1, \ldots, C_5` is one box, and `S' = (C_6, C_7)` is drawn as kept.
+
+eqlens says when a diagram would add nothing. `F = ma` is one step: the source is still printed, with a line saying so. A formula with an integral, a sum, or a derivative is not guessed at: there is no diagram, and the reason is given. In Python, `eqlens.diagram.diagram(tex)` returns `fits`, `why`, and `mermaid`. Over MCP, `eqlens_render` adds a line to its answer when a diagram fits, and `eqlens_diagram` returns it.
+
+eqlens does not run Mermaid. GitHub draws a `mermaid` block in a Markdown file, a Claude artifact draws `<pre class="mermaid">`, and any other page loads Mermaid itself.
 
 ## Hover
 

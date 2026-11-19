@@ -840,6 +840,92 @@ class BurnTests(unittest.TestCase):
             self.assertTrue(call({"tex": "F=ma"}).get("isError"))
 
 
+class DiagramTests(unittest.TestCase):
+    FOLD = r"L_0' = \mathrm{Conv}_\theta(L_0, L_1, C_0),\quad L_1' = \mathrm{Conv}_\theta(C_1, \ldots, C_5),\quad S' = (C_6, C_7)"
+
+    def test_a_formula_that_works_out_is_drawn_as_its_steps(self):
+        from eqlens.diagram import diagram
+
+        found = diagram(r"E = \frac{1}{2} m v^2 + m g h", define=["m=the mass"])
+        self.assertEqual((found["kind"], found["fits"], found["steps"]), ("steps", True, 4))
+        source = found["mermaid"]
+        self.assertIn("flowchart LR", source)
+        for label in ('(["times 1/2"])', '(["square"])', '(["add"])', '[["E"]]'):
+            self.assertIn(label, source)
+        # m is used twice and is one box, in the color the drawing gives it.
+        self.assertEqual(source.count('["m"]'), 1)
+        self.assertRegex(source, r'\["m"\]:::c0')
+        self.assertIn("stroke:#ffa657", source)
+        gauss = diagram(r"f(x) = \frac{1}{\sigma\sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}", legend=True)
+        self.assertTrue(gauss["fits"])
+        self.assertIn('-- "take away" -->', gauss["mermaid"])
+        self.assertIn('-- "bottom" -->', gauss["mermaid"])
+
+    def test_a_formula_that_names_what_is_done_is_drawn_as_its_calls(self):
+        from eqlens.diagram import diagram
+
+        found = diagram(self.FOLD, define=[r"\mathrm{Conv}_\theta=folds five slots into one"])
+        self.assertEqual((found["kind"], found["fits"], found["steps"]), ("calls", True, 2))
+        source = found["mermaid"]
+        self.assertEqual(source.count('{{"Conv_θ"}}:::c0'), 2)
+        for label in ('["L₀′"]', '["C₁ … C₅"]', '-- "kept" -->'):
+            self.assertIn(label, source)
+        # A result that is used again is one box: z runs out of f and into g.
+        chain = diagram(r"z = f(x, y),\quad w = g(z)", style="plain")
+        self.assertTrue(chain["fits"])
+        self.assertEqual(chain["mermaid"].count('["z"]'), 1)
+        self.assertNotIn("%%{init", chain["mermaid"])
+        self.assertNotIn("fill:", chain["mermaid"])
+
+    def test_it_says_when_a_diagram_would_add_nothing(self):
+        from eqlens.diagram import diagram
+        from eqlens.engine import FormulaError
+
+        one = diagram("F = m a")
+        self.assertFalse(one["fits"])
+        self.assertIn("one step", one["why"])
+        self.assertIn("flowchart", one["mermaid"])
+        none = diagram(r"\int_0^1 x\,dx = \frac{1}{2}")
+        self.assertEqual((none["fits"], none["mermaid"]), (False, ""))
+        self.assertIn("integral", none["why"])
+        with self.assertRaises(FormulaError):
+            diagram("x=1", style="neon")
+
+    def test_the_command_and_the_tools(self):
+        import tempfile
+
+        from eqlens.mcp import handle as answer
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(main(["--diagram", "light", "--direction", "TB", r"E = \frac{1}{2} m v^2 + m g h"]), 0)
+        self.assertIn("flowchart TB", out.getvalue())
+        self.assertIn('"theme": "neutral"', out.getvalue())
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "flow.md")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["--diagram", "dark", "-o", path, self.FOLD]), 0)
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+            self.assertTrue(text.startswith("```mermaid\n") and text.endswith("```\n"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(main(["--diagram", "dark", r"\sum_i x_i = 1"]), 1)
+        self.assertIn("no diagram", err.getvalue())
+
+        def call(name, arguments):
+            message = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": arguments}}
+            return answer(message)["result"]
+
+        found = json.loads(call("eqlens_diagram", {"tex": self.FOLD})["content"][0]["text"])
+        self.assertTrue(found["fits"])
+        self.assertIn("flowchart LR", found["mermaid"])
+        drawn = call("eqlens_render", {"tex": self.FOLD, "format": "svg"})
+        self.assertIn("eqlens_diagram", drawn["content"][-1]["text"])
+        plain_ = call("eqlens_render", {"tex": "F=ma", "format": "svg"})
+        self.assertEqual(len(plain_["content"]), 1)
+
+
 class PopTests(unittest.TestCase):
     GAUSS = r"f(x) = \frac{1}{\sigma\sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}"
 

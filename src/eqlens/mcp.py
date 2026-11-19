@@ -2,8 +2,9 @@
 
     eqlens-mcp
 
-Four tools. ``eqlens_render`` draws a formula. ``eqlens_comment`` draws it in
-braille dots as a comment for a source file. ``eqlens_inspect`` lists what
+Five tools. ``eqlens_render`` draws a formula. ``eqlens_comment`` draws it in
+braille dots as a comment for a source file. ``eqlens_diagram`` gives its flow
+as a Mermaid flowchart in the same colors. ``eqlens_inspect`` lists what
 is in one, and says whether it can be worked out as written. ``eqlens_bench``
 writes the bench: a workbook, a page with sliders, and a ManimGX scene, each
 symbol in its ledger color.
@@ -35,7 +36,10 @@ _INSTRUCTIONS = (
     "eqlens draws one TeX formula with every symbol colored and explained, and builds a bench for it: a workbook, "
     "a web page with sliders, and a ManimGX animation that show what each symbol does. "
     "Use eqlens_render to show a formula. Use eqlens_comment to put a formula into source code: it draws the "
-    "formula in braille dots as a comment block, and with file and write it puts the block at the head of that file. Use eqlens_bench when the user wants to explore, play with, plot, "
+    "formula in braille dots as a comment block, and with file and write it puts the block at the head of that file. "
+    "Use eqlens_diagram when a page, an artifact, or a Markdown file shows a formula whose flow is worth seeing: it "
+    "gives a Mermaid flowchart with each symbol in the color the drawing gives it, and says when a diagram would add "
+    "nothing. eqlens_render says so when a diagram fits the formula it drew. Use eqlens_bench when the user wants to explore, play with, plot, "
     "animate, or put a formula in a spreadsheet. A formula with a derivative, an integral, a sum, or an operator "
     "cannot be worked out as written: eqlens_bench then says so, and you call it again with expr giving one "
     "standard special case, and symbols giving each number a value, a range, a unit, and a meaning. "
@@ -91,6 +95,33 @@ TOOLS = [
                 "define": {**_STRINGS, "description": "'KEY=meaning' items, as for eqlens_render."},
                 "constant": {**_STRINGS, "description": "Constants from the built-in table: c, G, h, hbar, k_B, R, ..."},
                 "notes": {**_STRINGS, "description": "One to four short lines of fine print."},
+            },
+            "required": ["tex"],
+        },
+    },
+    {
+        "name": "eqlens_diagram",
+        "title": "Draw a formula's flow as a Mermaid diagram",
+        "description": (
+            "Turn one TeX formula into a Mermaid flowchart: what goes in, what is done to it, and what comes out, each "
+            "symbol in the color eqlens_render gives it. A formula that can be worked out is drawn as its steps. One "
+            "that names what is done, such as L' = \\mathrm{Conv}_\\theta(L_0, L_1), is drawn as its calls, and "
+            "several statements set apart by commas or \\quad share one picture. Returns fits (false when the "
+            "formula has one step, or too many, and the diagram would add nothing), why, and the Mermaid source. "
+            "Put the source in <pre class=\"mermaid\"> on a page or artifact that draws Mermaid, or in a "
+            "```mermaid block in Markdown, beside the eqlens drawing. Give the same define items as for "
+            "eqlens_render so the colors match. For your own diagrams of the same formula (a sequence, a wider "
+            "pipeline), reuse the classDef lines it returns so one symbol keeps one color everywhere."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tex": {"type": "string", "description": "The formula, as TeX. No $ signs needed."},
+                "style": {"type": "string", "enum": ["dark", "light", "plain"], "description": "dark (default, the eqlens ground), light, or plain: no theme and no fills."},
+                "direction": {"type": "string", "enum": ["LR", "TB", "RL", "BT"], "description": "Default LR."},
+                "define": {**_STRINGS, "description": "'KEY=meaning' items, as for eqlens_render: these symbols get colors."},
+                "legend": {"type": "boolean", "description": "Color the Greek letters, as eqlens_render does with legend or brief."},
+                "solve": {"type": "string", "description": "Turn the formula round to give this symbol."},
             },
             "required": ["tex"],
         },
@@ -227,7 +258,37 @@ def render_tool(args: dict) -> dict:
     result = _text(path)
     if fmt == "png":
         result["content"].append({"type": "image", "data": base64.b64encode(data).decode("ascii"), "mimeType": "image/png"})
+    fit = _fits(args)
+    if fit:
+        result["content"].append({"type": "text", "text": fit})
     return result
+
+
+def _fits(args: dict) -> str:
+    """One line for the caller when a flow diagram would add to the drawing. Empty when it would not."""
+    from eqlens.diagram import diagram
+
+    try:
+        found = diagram(str(args.get("tex", "")), define=_strings(args, "define"))
+    except FormulaError:
+        return ""
+    if not found["fits"]:
+        return ""
+    return f"A diagram fits this formula ({found['why']}): eqlens_diagram gives its flow as Mermaid in the same colors."
+
+
+def diagram_tool(args: dict) -> dict:
+    from eqlens.diagram import diagram
+
+    found = diagram(
+        str(args.get("tex", "")),
+        style=str(args.get("style") or "dark"),
+        direction=str(args.get("direction") or "LR"),
+        define=_strings(args, "define"),
+        legend=args.get("legend") is True,
+        solve=args.get("solve") or None,
+    )
+    return _text(found)
 
 
 def comment_tool(args: dict) -> dict:
@@ -328,7 +389,7 @@ def bench_tool(args: dict) -> dict:
     return _text(report)
 
 
-_CALLS = {"eqlens_render": render_tool, "eqlens_comment": comment_tool, "eqlens_inspect": inspect_tool, "eqlens_bench": bench_tool}
+_CALLS = {"eqlens_render": render_tool, "eqlens_comment": comment_tool, "eqlens_diagram": diagram_tool, "eqlens_inspect": inspect_tool, "eqlens_bench": bench_tool}
 
 
 def handle(message: dict) -> dict | None:

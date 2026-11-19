@@ -11,8 +11,8 @@ Whenever a feature lands or improves, these are part of the same piece of work:
 1. **Lead with the best.** The opening lines of the README and the top of the page (the headline text, the
    formula beside it, and the strip of feature cards under it) show the strongest things eqlens does, newest
    first. Today that order is: the card under a symbol with its plot, the bench, reading aloud, the shader,
-   and agents (MCP and the skill). The braille drawing for a plain terminal and burning a formula into a
-   source file come after these, in the chapter on using it. A new feature that beats one of these takes its place; it is never added
+   and agents (MCP and the skill). The braille drawing for a plain terminal, burning a formula into a
+   source file, and the Mermaid diagram of a formula come after these, in the chapter on using it. A new feature that beats one of these takes its place; it is never added
    at the bottom of the page.
 2. **Show it live.** On the page a feature is something the visitor can use at once, not a description of it.
    The formula at the top must exercise the newest feature.

@@ -44,6 +44,16 @@ One formula per call. `$...$` wrappers are optional.
 
 When the user asks to put, burn, or write a formula into code, a header, or a comment: `eqlens --burn <file> '<tex>'` puts the formula at the head of the file as a comment in braille dots, with the ledger and the TeX under it. Add `--legend`, `--define`, and `--note` as for a drawing. To put it somewhere else in the file, `eqlens --comment <file or ending> '<tex>'` prints the block: paste it above the code that computes the formula. Over MCP the tool is `eqlens_comment`. Keep the formula short, and show the user the block you added.
 
+## Add a diagram where it helps
+
+On a web page, an artifact, or a Markdown file, a formula that describes a flow reads better with a diagram beside the drawing. `eqlens --diagram dark '<tex>'` prints a Mermaid flowchart of the formula: what goes in, what is done, what comes out, each symbol in the color the drawing gives it. Pass the same `--define` items as for the drawing so the colors match. Use `light` on a white page, and `plain` in a README or anywhere the page sets its own theme.
+
+- Use it when eqlens says it fits. It prints `eqlens: one step only ...` on stderr when a diagram would say no more than the formula: then leave the diagram out. When it prints `no diagram: ...` there is none: do not draw one by hand that pretends to be the formula.
+- Put the source in `<pre class="mermaid">` on a page or artifact that draws Mermaid, or in a fenced `mermaid` block in Markdown. Put it under the eqlens drawing, never in place of it.
+- It suits a formula that names what is done (`L' = \mathrm{Conv}_\theta(L_0, L_1, C_0)`, several statements set apart by `\quad`) and one with several steps of arithmetic. It does not suit `F=ma`.
+- When you write your own diagram of the same idea (a sequence through the code, a wider pipeline), copy the `classDef` lines from the eqlens diagram so one symbol keeps one color in every picture on the page.
+- Do not add a diagram to a formula shown in the terminal, and do not add one the user did not ask for outside a page or a document.
+
 ## SVG or PNG
 
 SVG is the default for a file and for a pipe. `-o name.png` or `--format png` gives a PNG. Both are the same picture.

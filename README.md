@@ -15,6 +15,7 @@
   Then a bench to work it by hand: a page with sliders, a workbook, and an animation, in the same colors.<br>
   It reads the formula aloud, draws it as a shader, and serves agents over MCP.<br>
   In a plain terminal it draws the formula in braille dots, and burns those dots into a source file as a comment.<br>
+  Where a formula has a flow worth seeing, it gives that as a Mermaid diagram in the same colors.<br>
   macOS and Ubuntu. No TeX install.
 </p>
 
@@ -142,7 +143,7 @@ A real, closed-form formula is read as written. One with a derivative, an integr
 claude mcp add --scope user eqlens -- eqlens-mcp
 ```
 
-Four tools: `eqlens_render` draws a formula, `eqlens_comment` burns one into a source file as a comment, `eqlens_inspect` lists what is in one, and `eqlens_bench` writes the page, the workbook, and the scene. Then ask: "build a bench for the ideal gas law".
+Five tools: `eqlens_render` draws a formula, `eqlens_comment` burns one into a source file as a comment, `eqlens_diagram` gives its flow as a Mermaid diagram, `eqlens_inspect` lists what is in one, and `eqlens_bench` writes the page, the workbook, and the scene. Then ask: "build a bench for the ideal gas law".
 
 ## Or let Claude say it
 

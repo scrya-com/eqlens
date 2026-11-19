@@ -62,6 +62,17 @@ def main(argv: list[str] | None = None) -> int:
         metavar="FILE",
         help="put that comment at the head of FILE, under a #! line. A block for the same formula is replaced, not added twice",
     )
+    parser.add_argument(
+        "--diagram",
+        metavar="STYLE",
+        choices=("dark", "light", "plain"),
+        help="print the formula as a Mermaid flowchart, each symbol in its ledger color: what goes in, what is done, "
+        "what comes out. STYLE is dark, light, or plain (no theme, for a page that sets its own). With -o it is "
+        "written to that file, as a fenced block when the file ends in .md",
+    )
+    parser.add_argument(
+        "--direction", choices=("LR", "TB", "RL", "BT"), default="LR", help="with --diagram: which way it runs. Default LR"
+    )
     parser.add_argument("--width", type=int, default=None, help="with --comment or --burn: the longest line. Default 78")
     parser.add_argument("--columns", type=int, default=None, help="with --display text: how wide to draw. Default: the terminal")
     parser.add_argument(
@@ -276,6 +287,24 @@ def main(argv: list[str] | None = None) -> int:
             done = _bench(tex, args, {})
             if done or not args.output:
                 return done
+        if args.diagram:
+            from eqlens.diagram import diagram, fenced
+
+            found = diagram(
+                tex, style=args.diagram, direction=args.direction, define=args.define,
+                legend=args.legend or args.brief, solve=args.solve,
+            )
+            if not found["mermaid"]:
+                raise FormulaError(found["why"])
+            if not found["fits"]:
+                print(f"eqlens: {found['why']}", file=sys.stderr)
+            if args.output:
+                with open(args.output, "w", encoding="utf-8") as handle:
+                    handle.write(fenced(found["mermaid"]) if args.output.lower().endswith((".md", ".markdown")) else found["mermaid"])
+                print(os.path.abspath(args.output))
+            else:
+                print(found["mermaid"], end="")
+            return 0
         if args.comment or args.burn:
             from eqlens.text import WIDTH, burn, comment
 
