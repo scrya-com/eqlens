@@ -206,6 +206,7 @@ For Claude Desktop or another client, the entry is `{"mcpServers": {"eqlens": {"
 | Tool | What it does |
 |---|---|
 | `eqlens_render` | Draws a formula as PNG, SVG, or HTML. Returns the path, and the picture for a PNG. |
+| `eqlens_comment` | Draws the formula in braille dots as a comment block. Returns the text, or with `file` and `write` puts it at the head of that file. |
 | `eqlens_inspect` | Lists the symbols, says whether the formula works out as written, and gives each symbol's plain name. |
 | `eqlens_bench` | Writes the page, the workbook, the scene, and the spec. Default: the page and the workbook, in a temporary folder; `out_dir` says where to keep them. |
 
@@ -223,6 +224,31 @@ eqlens --display cells 'E=mc^2'                   # the same drawing as JSON, fo
 ```
 
 Plain ink is left in the terminal's own text color, so it reads on a light theme and a dark one. A long formula is drawn smaller to fit the width, and past a point small is hard to read: widen the window, or open the file. `NO_COLOR` turns the colors off. Tiers are not drawn in dots.
+
+## Burn a formula into a source file
+
+The same dots, without color, as a comment in the language of the file. Under them come the ledger, the notes, and the TeX itself, so the formula can be searched for.
+
+```bash
+eqlens --burn gamma.py --legend --define 'v=speed' '\gamma=\frac{1}{\sqrt{1-v^2/c^2}}'
+eqlens --comment rs 'E=mc^2'              # print the block, to paste where the formula is computed
+eqlens --comment '//' --width 60 'F=ma'   # by comment mark, no line longer than 60
+```
+
+```python
+# ── eqlens ──────────────────────────────────────
+#        ⠋⢙⡆           ⢠    ⠋⠙⡆               ⠊⠙⡆
+#   ⠠⠤⢤⡄ ⣠⣊⡀     ⡇     ⣿⠤⢤⡄ ⣠⣊⡀  ⢀⣀⣀⣀⣀⡀   ⣠⠤⠤ ⣠⣞⡁
+#  ⢀⡴⠒⢲⡇ ⠉⠉⠁  ⠐⠒⠺⡗⠒⠂  ⢰⡏ ⢠⡇ ⠉⠉⠁  ⢀⣭⣭⣭⣭⡅  ⢸⠃   ⠈⠉⠁
+#  ⠈⠳⠖⠻⠃         ⠇    ⠸⠳⠶⠛               ⠘⠳⠶⠂
+#
+#    a^2+b^2=c^2
+# ────────────────────────────────────────────────
+```
+
+`--burn` puts the block at the head of the file, under a `#!` line when there is one. Burn the same formula again and its block is replaced where it stands, not added twice. The file's ending picks the comment marks: `#`, `//`, `--`, `%`, `;`, `!`, `/* */`, or `<!-- -->`. For a file with an ending eqlens does not know, give `--comment` a mark as well. The file must already exist. From Python: `eqlens.text.comment(tex, "py")` and `eqlens.text.burn(path, tex)`.
+
+Keep the formula short. A long one is drawn small to fit 78 characters and reads badly in dots.
 
 ## Hover
 

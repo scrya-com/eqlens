@@ -4,11 +4,15 @@ The formula is drawn with braille characters: each one is a block of two dots
 by four, so a line of text holds four rows of dots. A character takes the color
 of the ink under it, so each symbol keeps its ledger color. The ledger and the
 notes are plain lines of text under it.
+
+``comment`` writes the same drawing, without color, as a comment for a source
+file, and ``burn`` puts it at the head of one.
 """
 
 from __future__ import annotations
 
 import math
+import os
 from typing import Sequence
 
 import numpy as np
@@ -135,3 +139,109 @@ def _braille(pixels: np.ndarray) -> list[list[list]]:
     while lines and not lines[-1]:
         lines.pop()
     return lines
+
+
+# How each language writes a comment: (first line, start of every line, last line).
+_LINE = {
+    "#": "py pyi sh bash zsh fish rb pl r jl yaml yml toml cfg ini conf nim cmake mk ex exs tcl ps1 dockerfile makefile",
+    "//": "c h cc cpp cxx hpp hh m mm cs java kt kts scala swift go rs js jsx mjs cjs ts tsx dart php zig v sv "
+    "glsl frag vert wgsl hlsl metal proto groovy gradle",
+    "--": "lua sql hs elm ada vhd vhdl",
+    "%": "tex sty cls bib erl",
+    ";": "lisp cl el clj cljs scm rkt asm s",
+    "!": "f90 f95 f03 f08",
+}
+STYLES: dict[str, tuple[str, str, str]] = {
+    ending: ("", mark, "") for mark, endings in _LINE.items() for ending in endings.split()
+}
+STYLES.update({ending: ("/*", " *", " */") for ending in ("css", "scss", "less")})
+STYLES.update({ending: ("<!--", "", "-->") for ending in ("html", "htm", "xml", "svg", "md", "vue", "svelte")})
+_MARKS = {"#": "py", "//": "c", "--": "lua", "%": "tex", ";": "lisp", "!": "f90", "/*": "css", "<!--": "html"}
+_HEAD, _RULE = "── eqlens ", "─"
+WIDTH = 78
+
+
+def style_of(name: str) -> tuple[str, str, str]:
+    """The comment style for a file name, an ending such as ``py``, or a mark such as ``//``."""
+    text = (name or "").strip()
+    if text in _MARKS:
+        return STYLES[_MARKS[text]]
+    base = os.path.basename(text).lower()
+    ending = base.rsplit(".", 1)[-1] if "." in base else base
+    if ending not in STYLES:
+        raise FormulaError(
+            f"no comment style known for {name!r}: give a file name, an ending such as py or rs, or one of "
+            + " ".join(_MARKS)
+        )
+    return STYLES[ending]
+
+
+def comment(tex: str, style: str, *, width: int = WIDTH, **options) -> str:
+    """The formula in dots as a comment block for a source file, ending in a newline.
+
+    ``style`` is a file name, an ending, or a comment mark. ``width`` is the
+    longest line, comment mark and all. The other options are those of ``cells``.
+    The block is plain text: a source file holds no colors. Under the dots come
+    the ledger, the notes, and the TeX itself, so the formula can be searched for.
+    """
+    first, mark, last = style_of(style)
+    if not isinstance(width, int) or isinstance(width, bool) or not 40 <= width <= 400:
+        raise FormulaError("width must be a whole number from 40 to 400")
+    room = width - len(mark) - 1
+    found = cells(tex, columns=room - 1, **options)
+    body = ansi(found, color=False).rstrip("\n").split("\n")
+    if "\n" in found["tex"] or any(end and end in found["tex"] for end in (last.strip(), "--" if last == "-->" else "")):
+        raise FormulaError("this formula cannot sit inside that kind of comment")
+    lines = [_HEAD + _RULE * (room - len(_HEAD)), *(" " + line if line else "" for line in body), "", "   " + found["tex"]]
+    lines.append(_RULE * room)
+    out = [first] if first else []
+    out.extend((mark + " " + line).rstrip() if mark else line.rstrip() for line in lines)
+    if last:
+        out.append(last)
+    return "\n".join(out) + "\n"
+
+
+def burn(path: str, tex: str, *, style: str | None = None, **options) -> str:
+    """Put the comment block at the head of the file at ``path``. Return ``"added"`` or ``"replaced"``.
+
+    The block goes under a ``#!`` line, an encoding line, or an XML or doctype
+    line when the file starts with one. A block for the same formula that is
+    already in the file is replaced where it stands, so burning twice changes
+    nothing. The file must exist and be UTF-8 text.
+    """
+    block = comment(tex, style or path, **options)
+    first, mark, last = style_of(style or path)
+    try:
+        with open(path, encoding="utf-8", newline="") as handle:
+            text = handle.read()
+    except UnicodeDecodeError as exc:
+        raise FormulaError(f"{path} is not UTF-8 text") from exc
+    newline = "\r\n" if "\r\n" in text else "\n"
+    lines = text.split(newline)
+    new = block.rstrip("\n").split("\n")
+    start = (mark + " " if mark else "") + _HEAD
+    wanted = new[-2 - bool(last)]
+    for at, line in enumerate(lines):
+        if not line.startswith(start):
+            continue
+        end = next((i for i in range(at + 1, len(lines)) if lines[i].lstrip(mark).strip().strip(_RULE) == ""
+                    and _RULE in lines[i]), None)
+        if end is None or wanted not in lines[at:end]:
+            continue
+        lo, hi = at - bool(first and at and lines[at - 1] == first), end + 1 + bool(last and lines[end + 1 : end + 2] == [last])
+        lines[lo:hi] = new
+        _write(path, newline.join(lines))
+        return "replaced"
+    at = 0
+    while at < len(lines) and at < 2 and (
+        lines[at].startswith(("#!", "<?xml", "<!DOCTYPE", "<!doctype")) or "coding" in lines[at] and lines[at].startswith("#")
+    ):
+        at += 1
+    lines[at:at] = new + ([""] if at < len(lines) and lines[at].strip() else [])
+    _write(path, newline.join(lines))
+    return "added"
+
+
+def _write(path: str, text: str) -> None:
+    with open(path, "w", encoding="utf-8", newline="") as handle:
+        handle.write(text)

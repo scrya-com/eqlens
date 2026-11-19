@@ -751,6 +751,95 @@ class TextTests(unittest.TestCase):
         self.assertEqual(json.loads(out.getvalue())["tex"], "x=1")
 
 
+class BurnTests(unittest.TestCase):
+    def test_a_comment_fits_the_language_and_the_width(self):
+        from eqlens.text import comment
+
+        block = comment(r"E=mc^2", "gamma.py", width=60, legend=True, notes=["Rest energy."])
+        lines = block.rstrip("\n").split("\n")
+        self.assertTrue(all(line.startswith("#") and len(line) <= 60 for line in lines))
+        self.assertTrue(lines[0].startswith("# ── eqlens ─"))
+        self.assertIn("#    E=mc^2", lines)
+        self.assertIn("Rest energy.", block)
+        self.assertNotIn("\033", block)
+        self.assertFalse(any(line != line.rstrip() for line in lines))
+        self.assertTrue(comment("x=1", "//").startswith("// ── eqlens"))
+        css = comment("x=1", "a.css").split("\n")
+        self.assertEqual((css[0], css[-2]), ("/*", " */"))
+        self.assertTrue(comment("x=1", "index.html").startswith("<!--\n"))
+        with self.assertRaises(FormulaError):
+            comment("x=1", "notes.xyz")
+        with self.assertRaises(FormulaError):
+            comment("x--", "index.html")
+
+    def test_burn_goes_under_the_first_line_and_is_not_added_twice(self):
+        import tempfile
+
+        from eqlens.text import burn
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "g.py")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("#!/usr/bin/env python3\nimport math\n")
+            self.assertEqual(burn(path, r"E=mc^2"), "added")
+            with open(path, encoding="utf-8") as handle:
+                once = handle.read()
+            lines = once.split("\n")
+            self.assertEqual(lines[0], "#!/usr/bin/env python3")
+            self.assertTrue(lines[1].startswith("# ── eqlens"))
+            self.assertTrue(once.endswith("\n\nimport math\n"))
+            self.assertEqual(burn(path, r"E=mc^2"), "replaced")
+            with open(path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), once)
+            # The same formula with a note still replaces its block; another formula gets a block of its own.
+            self.assertEqual(burn(path, r"E=mc^2", notes=["Rest energy."]), "replaced")
+            self.assertEqual(burn(path, r"F=ma"), "added")
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+            self.assertEqual(text.count("── eqlens"), 2)
+            self.assertIn("Rest energy.", text)
+            self.assertTrue(text.endswith("import math\n"))
+
+            sheet = os.path.join(folder, "a.css")
+            with open(sheet, "w", encoding="utf-8") as handle:
+                handle.write("body { color: red; }\n")
+            self.assertEqual(burn(sheet, "x=1"), "added")
+            self.assertEqual(burn(sheet, "x=1"), "replaced")
+            with open(sheet, encoding="utf-8") as handle:
+                text = handle.read()
+            self.assertEqual((text.count("/*"), text.count("*/")), (1, 1))
+
+    def test_the_command_and_the_mcp_tool_burn(self):
+        import tempfile
+
+        from eqlens.mcp import handle as answer
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "m.rs")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("fn main() {}\n")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(main(["--burn", path, "F=ma"]), 0)
+            self.assertTrue(out.getvalue().startswith("added: "))
+            with open(path, encoding="utf-8") as handle:
+                self.assertTrue(handle.read().startswith("// ── eqlens"))
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                self.assertEqual(main(["--burn", os.path.join(folder, "none.py"), "F=ma"]), 1)
+
+            def call(arguments):
+                message = {"jsonrpc": "2.0", "id": 1, "method": "tools/call"}
+                message["params"] = {"name": "eqlens_comment", "arguments": arguments}
+                return answer(message)["result"]
+
+            shown = call({"tex": "F=ma", "style": "py"})
+            self.assertTrue(shown["content"][0]["text"].startswith("# ── eqlens"))
+            done = call({"tex": "F=ma", "file": path, "write": True})
+            self.assertEqual(done["content"][0]["text"], "replaced: " + path)
+            self.assertTrue(call({"tex": "F=ma"}).get("isError"))
+
+
 class PopTests(unittest.TestCase):
     GAUSS = r"f(x) = \frac{1}{\sigma\sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}"
 

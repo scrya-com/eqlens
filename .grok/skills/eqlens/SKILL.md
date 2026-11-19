@@ -40,6 +40,10 @@ The person can type the same thing:
 
 One formula per call. `$...$` wrappers are optional.
 
+## Burn it into a source file
+
+When the user asks to put, burn, or write a formula into code, a header, or a comment: `eqlens --burn <file> '<tex>'` puts the formula at the head of the file as a comment in braille dots, with the ledger and the TeX under it. Add `--legend`, `--define`, and `--note` as for a drawing. To put it somewhere else in the file, `eqlens --comment <file or ending> '<tex>'` prints the block: paste it above the code that computes the formula. Over MCP the tool is `eqlens_comment`. Keep the formula short, and show the user the block you added.
+
 ## SVG or PNG
 
 SVG is the default for a file and for a pipe. `-o name.png` or `--format png` gives a PNG. Both are the same picture.

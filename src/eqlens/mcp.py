@@ -2,7 +2,8 @@
 
     eqlens-mcp
 
-Three tools. ``eqlens_render`` draws a formula. ``eqlens_inspect`` lists what
+Four tools. ``eqlens_render`` draws a formula. ``eqlens_comment`` draws it in
+braille dots as a comment for a source file. ``eqlens_inspect`` lists what
 is in one, and says whether it can be worked out as written. ``eqlens_bench``
 writes the bench: a workbook, a page with sliders, and a ManimGX scene, each
 symbol in its ledger color.
@@ -33,7 +34,8 @@ _STRINGS = {"type": "array", "items": {"type": "string"}}
 _INSTRUCTIONS = (
     "eqlens draws one TeX formula with every symbol colored and explained, and builds a bench for it: a workbook, "
     "a web page with sliders, and a ManimGX animation that show what each symbol does. "
-    "Use eqlens_render to show a formula. Use eqlens_bench when the user wants to explore, play with, plot, "
+    "Use eqlens_render to show a formula. Use eqlens_comment to put a formula into source code: it draws the "
+    "formula in braille dots as a comment block, and with file and write it puts the block at the head of that file. Use eqlens_bench when the user wants to explore, play with, plot, "
     "animate, or put a formula in a spreadsheet. A formula with a derivative, an integral, a sum, or an operator "
     "cannot be worked out as written: eqlens_bench then says so, and you call it again with expr giving one "
     "standard special case, and symbols giving each number a value, a range, a unit, and a meaning. "
@@ -62,6 +64,33 @@ TOOLS = [
                 "constant": {**_STRINGS, "description": "Constants from the built-in table: c, G, h, hbar, k_B, R, ..."},
                 "notes": {**_STRINGS, "description": "One to four short lines of fine print."},
                 "path": {"type": "string", "description": "Where to write the file. Default: a temporary folder."},
+            },
+            "required": ["tex"],
+        },
+    },
+    {
+        "name": "eqlens_comment",
+        "title": "Burn a formula into source code",
+        "description": (
+            "Draw one TeX formula in braille dots as a comment block for a source file: the dots, then the ledger in "
+            "words, the notes, and the TeX itself. Returns the block as text, to paste where the formula is computed. "
+            "With file and write true it puts the block at the head of that file instead, under a #! line, and "
+            "replaces a block for the same formula rather than adding a second. Give style or file so the comment "
+            "marks fit the language. Keep the formula short: a long one is drawn small and reads badly in dots."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tex": {"type": "string", "description": "The formula, as TeX. No $ signs needed."},
+                "file": {"type": "string", "description": "The source file. Its ending picks the comment style."},
+                "style": {"type": "string", "description": "An ending such as py or rs, or a mark such as # or //. Wins over file."},
+                "write": {"type": "boolean", "description": "Put the block at the head of file. Default false: only return it."},
+                "width": {"type": "integer", "description": "The longest line, comment mark and all. Default 78."},
+                "legend": {"type": "boolean", "description": "Name every Greek letter, accent, and script."},
+                "brief": {"type": "boolean", "description": "As legend, but leave out plain subscripts and powers."},
+                "define": {**_STRINGS, "description": "'KEY=meaning' items, as for eqlens_render."},
+                "constant": {**_STRINGS, "description": "Constants from the built-in table: c, G, h, hbar, k_B, R, ..."},
+                "notes": {**_STRINGS, "description": "One to four short lines of fine print."},
             },
             "required": ["tex"],
         },
@@ -201,6 +230,29 @@ def render_tool(args: dict) -> dict:
     return result
 
 
+def comment_tool(args: dict) -> dict:
+    from eqlens.text import WIDTH, burn, comment
+
+    tex, file, style = str(args.get("tex", "")), args.get("file"), args.get("style")
+    if not file and not style:
+        raise FormulaError("give file or style, so the comment marks fit the language")
+    width = args.get("width", WIDTH)
+    options = dict(
+        width=width,
+        legend=args.get("legend") is True,
+        brief=args.get("brief") is True,
+        define=_strings(args, "define"),
+        constant=_strings(args, "constant"),
+        notes=_strings(args, "notes"),
+    )
+    if args.get("write") is True:
+        if not file:
+            raise FormulaError("write needs file")
+        path = os.path.abspath(os.path.expanduser(str(file)))
+        return _text(f"{burn(path, tex, style=str(style) if style else None, **options)}: {path}")
+    return _text(comment(tex, str(style or file), **options))
+
+
 def inspect_tool(args: dict) -> dict:
     from eqlens.bench.expr import Unreadable, from_tex, slug, symbols_in, to_text
     from eqlens.introspect import _keys, inspect
@@ -276,7 +328,7 @@ def bench_tool(args: dict) -> dict:
     return _text(report)
 
 
-_CALLS = {"eqlens_render": render_tool, "eqlens_inspect": inspect_tool, "eqlens_bench": bench_tool}
+_CALLS = {"eqlens_render": render_tool, "eqlens_comment": comment_tool, "eqlens_inspect": inspect_tool, "eqlens_bench": bench_tool}
 
 
 def handle(message: dict) -> dict | None:

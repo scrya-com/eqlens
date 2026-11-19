@@ -51,6 +51,18 @@ def main(argv: list[str] | None = None) -> int:
         help="text draws the formula in braille dots, for a terminal that cannot paint a picture; "
         "auto does that too, and then writes the file. cells prints the same drawing as JSON",
     )
+    parser.add_argument(
+        "--comment",
+        metavar="STYLE",
+        help="print the formula in dots as a comment for a source file. STYLE is a file name, an ending such as "
+        "py or rs, or a comment mark such as '#' or '//'",
+    )
+    parser.add_argument(
+        "--burn",
+        metavar="FILE",
+        help="put that comment at the head of FILE, under a #! line. A block for the same formula is replaced, not added twice",
+    )
+    parser.add_argument("--width", type=int, default=None, help="with --comment or --burn: the longest line. Default 78")
     parser.add_argument("--columns", type=int, default=None, help="with --display text: how wide to draw. Default: the terminal")
     parser.add_argument(
         "--legend",
@@ -264,6 +276,23 @@ def main(argv: list[str] | None = None) -> int:
             done = _bench(tex, args, {})
             if done or not args.output:
                 return done
+        if args.comment or args.burn:
+            from eqlens.text import WIDTH, burn, comment
+
+            options = dict(
+                width=args.width if args.width is not None else WIDTH, legend=args.legend, brief=args.brief,
+                define=args.define, tier=args.tier, constant=args.constant, shared=args.shared, notes=args.note,
+                font=args.font,
+            )
+            if args.burn:
+                try:
+                    done = burn(args.burn, tex, style=args.comment, **options)
+                except OSError as exc:
+                    raise FormulaError(f"--burn {args.burn}: {exc.strerror or exc}") from exc
+                print(f"{done}: {os.path.abspath(args.burn)}")
+            else:
+                print(comment(tex, args.comment, **options), end="")
+            return 0
         # A terminal with no picture protocol still gets to see the formula, in dots, above the file's path.
         plain = args.display == "auto" and mode == "file" and not args.output and sys.stdout.isatty()
         if mode in ("text", "cells") or (plain and fmt in ("svg", "png")):
