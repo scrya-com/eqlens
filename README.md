@@ -168,7 +168,14 @@ The tests draw some fifty formulas from physics, quantum physics, and machine le
 
 ## Claude Code
 
-A pane for the formulas. The terminal paints the PNG. The mod keeps the path.
+A pane for the formulas, beside the chat. Run Claude Code in [Kitty](https://sw.kovidgoyal.net/kitty/) and the pane shows the real picture: `/eqlens` draws a formula into it, and every formula the agent draws lands there too.
+
+![Claude Code in Kitty: the agent lists seven equations it drew, and the eqlens pane shows one with each symbol colored and explained](docs/kitty-pane.webp)
+
+```bash
+sudo apt install kitty        # or: brew install --cask kitty
+kitty claude --plugin-dir /path/to/eqlens
+```
 
 ```
 /plugin install eqlens --marketplace scrya-com/eqlens
@@ -191,7 +198,7 @@ With the eqlens MCP server also connected, the pane follows it: each PNG that `e
 
 `/eqlens` opens the pane. A formula is drawn and kept. Prev, Next, and Drop walk that list. `--legend`, `--define`, and `--note` are the same flags as the command line.
 
-Ghostty, kitty, or iTerm2 paints the PNG, with Claude Code 2.1.287 or later. Any other terminal, GNOME Terminal among them, gets the formula in braille dots with the ledger in words under it. A narrow window holds the pane back until you type `/eqlens`.
+Kitty paints the PNG, and so do Ghostty and iTerm2, with Claude Code 2.1.287 or later. Any other terminal, GNOME Terminal among them, gets the formula in braille dots with the ledger in words under it. A narrow window holds the pane back until you type `/eqlens`.
 
 ## For an LLM
 
