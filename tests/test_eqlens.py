@@ -959,6 +959,50 @@ class PopTests(unittest.TestCase):
         self.assertFalse(any("ys" in card for card in cards))
         self.assertIn("the wave function", [card["n"] for card in cards])
 
+    def test_a_part_over_the_sum_of_all_parts_is_drawn_as_shares(self):
+        softmax = r"\sigma(z)_i=\frac{e^{z_i}}{\sum_{j=1}^{K}e^{z_j}}"
+        page = render_html(softmax, brief=True, define=["z_i=the raw score for class i"], sets=["z_i=1:-2:4", "K=3"])
+        card = next(card for card in self.cards(page) if "bs" in card)
+        self.assertEqual((card["g"], card["lo"], card["hi"], card["out"]), ("z_i", -2.0, 4.0, "σ(z)_i"))
+        self.assertEqual(len(card["bs"]), 49)
+        self.assertEqual(card["bx"], [0.0, 2.0])
+        for shares in card["bs"]:
+            self.assertEqual(len(shares), 3)
+            self.assertAlmostEqual(sum(shares), 1.0, places=3)
+        # A higher score is a larger share, and it is taken from the others.
+        self.assertLess(card["bs"][0][0], card["bs"][-1][0])
+        self.assertGreater(card["bs"][0][2], card["bs"][-1][2])
+        self.assertEqual(card["ys"], [shares[0] for shares in card["bs"]])
+        # Read from the shape, not the name: a Boltzmann weight is the same kind of formula.
+        boltzmann = r"p_i=\frac{e^{-E_i/T}}{\sum_{j} e^{-E_j/T}}"
+        cards = self.cards(render_html(boltzmann, define=["E_i=the energy of state i"]))
+        energy = next(card for card in cards if "bs" in card)
+        self.assertEqual(len(energy["bs"][0]), 4)
+        self.assertGreater(energy["bs"][0][0], energy["bs"][-1][0])
+        # A ratio that is not a part of its own sum keeps the words only.
+        other = self.cards(render_html(r"y_i=\frac{a_i}{\sum_{j} b_j}", define=["a_i=one part"]))
+        self.assertFalse(any("bs" in card for card in other))
+
+    def test_a_card_can_link_to_where_the_symbol_is_explained(self):
+        from eqlens.engine import FormulaError
+
+        page = render_html("E=mc^2", define=["m=the mass"], link=["m=https://example.org/mass?t=3 What mass is"])
+        card = next(card for card in self.cards(page) if card["g"] == "m")
+        self.assertEqual(card["m"], ["https://example.org/mass?t=3", "What mass is"])
+        bare = render_html("E=mc^2", define=["m=the mass"], link=["m=https://www.example.org/x"])
+        self.assertEqual(next(card for card in self.cards(bare) if card["g"] == "m")["m"][1], "example.org")
+        for bad in ("m=javascript:alert(1)", "m=", "q=https://example.org"):
+            with self.assertRaises(FormulaError):
+                render_html("E=mc^2", define=["m=the mass"], link=[bad])
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "e.html")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(["--define", "m=the mass", "--link", "m=https://example.org", "-o", path, "E=mc^2"]), 0)
+            with open(path, encoding="utf-8") as handle:
+                self.assertIn('"m":["https://example.org","example.org"]', handle.read())
+
     def test_sets_and_constants_shape_the_curve(self):
         page = render_html(
             r"E^2 = (pc)^2 + (mc^2)^2", constant=["c"], define=["m=rest mass"], sets=["m=1e-30:0:3e-30:kg", "p=1e-22:0:5e-22"]

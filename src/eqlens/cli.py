@@ -137,6 +137,14 @@ def main(argv: list[str] | None = None) -> int:
         "or tensors, which reads as arithmetic but is not a curve",
     )
     parser.add_argument(
+        "--link",
+        action="append",
+        default=[],
+        metavar="KEY=URL [WORDS]",
+        help="html only: put a link in the card under a symbol, to a video or a page that explains it. The words "
+        "after the URL are what the link says; without them it says the site's name. The symbol needs a ledger row",
+    )
+    parser.add_argument(
         "--no-pop",
         action="store_true",
         help="html only: leave out the card that opens under a symbol when it is pointed at. The card says what the "
@@ -433,8 +441,8 @@ def _render(tex: str, fmt: str, args) -> bytes:
     }
     if fmt == "html":
         # The daemon does not take these, so a drawing that needs them is made here.
-        extra = {"pop": False if args.no_pop else "words" if args.no_plot else True, "sets": args.set, "expr": args.expr, "solve": args.solve}
-        if args.no_pop or args.no_plot or args.set or args.expr or args.solve:
+        extra = {"pop": False if args.no_pop else "words" if args.no_plot else True, "sets": args.set, "expr": args.expr, "solve": args.solve, "link": args.link}
+        if args.no_pop or args.no_plot or args.set or args.expr or args.solve or args.link:
             return render(tex, fmt, **options, **extra)
     if not args.local and args.url and _healthy(args.url):
         data = _fetch(args.url, tex, fmt, options)

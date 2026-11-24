@@ -67,6 +67,7 @@ TOOLS = [
                 "tier": {**_STRINGS, "description": "'KEY=formula' items: what a symbol is made of."},
                 "constant": {**_STRINGS, "description": "Constants from the built-in table: c, G, h, hbar, k_B, R, ..."},
                 "notes": {**_STRINGS, "description": "One to four short lines of fine print."},
+                "link": {**_STRINGS, "description": "html only: 'KEY=URL words to show' items. A link in that symbol's card, to a video or a page the user gave."},
                 "path": {"type": "string", "description": "Where to write the file. Default: a temporary folder."},
             },
             "required": ["tex"],
@@ -243,6 +244,7 @@ def render_tool(args: dict) -> dict:
         tier=_strings(args, "tier"),
         constant=_strings(args, "constant"),
         notes=_strings(args, "notes"),
+        link=_strings(args, "link"),
     )
     path = args.get("path")
     if path:

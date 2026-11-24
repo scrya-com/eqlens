@@ -97,6 +97,16 @@ eqlens --legend --define '\sigma=the spread' --set '\sigma=1:0.2:3' -o bell.html
 
 A symbol that only takes whole numbers, such as a level `n`, gets a step after its range: `--set 'n=0:0:10/1'`. Its card then draws a dot for each value and no line between, and a bench steps its slider the same way.
 
+A formula that is one part over the sum of all the parts, such as softmax or a Boltzmann weight, is a share of a whole, and its card draws bars in place of a curve: one for this part and one for each of a few others. As the symbol runs across its range its bar grows, the others shrink, and the percents always add up to 1. eqlens reads this from the shape of the formula, `\frac{f(x_i)}{\sum_j f(x_j)}`, not from its name. `--set` gives the symbol its range, and a value for the sum's upper end says how many bars to draw, from 2 to 6:
+
+```bash
+eqlens --brief --define 'z_i=the raw score for class i' --set 'z_i=1:-2:4' --set 'K=3' \
+  --link 'z_i=https://youtu.be/ytbYRIN0N4g?t=229 Softmax in 3D, a video by Elliot Waite' \
+  -o softmax.html '\sigma(z)_i=\frac{e^{z_i}}{\sum_{j=1}^{K}e^{z_j}}'
+```
+
+`--link 'KEY=URL words'` puts a link at the foot of that symbol's card, to a video or a page that explains it. The words after the URL are what the link says; without them it says the site's name. The symbol needs a ledger row, so give it a `--define`. Click or tap the symbol to pin its card, then follow the link.
+
 `--no-plot` keeps the words and leaves the plot out: use it for a formula of matrices or tensors, which reads as arithmetic but is not a curve. `--no-pop` leaves the cards out. The card's colors follow `--eq-pop-bg`, `--eq-pop-line`, `--eq-fg`, and `--eq-dim` if the page sets them.
 
 The fragment carries its own style and its scripts. The SVG and PNG have no script in them. In an SVG or PNG the tiers are always open.
@@ -336,6 +346,7 @@ Each SVG scopes its own ids and styles, so many can share a page.
 | `-o file` | Write a file, print its absolute path, and do not display it. `.png` writes a PNG, `.html` a fragment with buttons, anything else an SVG |
 | `--format svg\|png\|html` | Choose the format whatever the file is called. `html` adds the Copy and Expand buttons and a card under each symbol |
 | `--no-pop` | `html` only: leave out the card that opens under a symbol |
+| `--link 'KEY=URL words'` | `html` only: a link in that symbol's card, to a video or a page that explains it |
 | `--font sans\|serif\|stix\|cm` | Typeface. `stix` and `cm` look like a printed paper |
 | `--local` | Render in this process |
 | `--bg '#12141a'` | Background. A bare formula is transparent by default; a card is dark |

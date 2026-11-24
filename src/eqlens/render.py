@@ -98,6 +98,7 @@ def render(
     sets: Sequence = (),
     expr: str | None = None,
     solve: str | None = None,
+    link: Sequence[str] = (),
     _disclose: str | None = None,
 ) -> bytes:
     """Draw ``tex`` as ``svg``, ``png``, ``html``, or ``glsl`` bytes.
@@ -178,7 +179,7 @@ def render(
             )
             pops = embed(cards(
                 text[1:-1].strip(), rows, define=own, tier=tier, constant=constant, shared=shared,
-                sets=sets, expr=expr, solve=solve, plot=pop != "words",
+                sets=sets, expr=expr, solve=solve, plot=pop != "words", link=link,
             ))
         return _html(text[1:-1].strip(), shut, wide, pops).encode("utf-8")
 
