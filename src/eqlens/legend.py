@@ -118,6 +118,8 @@ _FONTS = {"mathrm", "text", "mathit", "mathsf", "mathbf", "mathtt", "operatornam
 _WORD = re.compile(r"^\\(?:mathrm|text|mathit|mathsf|operatorname)\{[A-Za-z][A-Za-z -]+\}$")
 # Symbols with a name of their own that are not Greek: command, spoken name, meaning.
 _NAMED = (
+    ("exp", "exponential", "Each 1 added inside multiplies the result by $e$, about 2.718. Each 1 taken away divides it."),
+    ("ln", "natural log", "How many times $e$, about 2.718, is multiplied by itself to give what is inside. It undoes exp."),
     ("hbar", "h bar", "Planck's constant divided by $2\\pi$, about $1.055\\times10^{-34}$ J s."),
     ("nabla", "del", "The gradient: which way a value rises fastest, and how fast."),
     ("partial", "partial", "A derivative in one variable, holding the others still."),

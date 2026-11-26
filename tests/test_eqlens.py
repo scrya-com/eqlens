@@ -983,6 +983,26 @@ class PopTests(unittest.TestCase):
         other = self.cards(render_html(r"y_i=\frac{a_i}{\sum_{j} b_j}", define=["a_i=one part"]))
         self.assertFalse(any("bs" in card for card in other))
 
+    def test_exp_and_ln_are_named_and_get_their_own_curve(self):
+        bell = r"f(x)=\frac{1}{\sigma\sqrt{2\pi}}\exp\left(-\frac{(x-\mu)^{2}}{2\sigma^{2}}\right)"
+        cards = self.cards(render_html(bell, legend=True, sets=["x=0:-4:4", r"\mu=0:-2:2"]))
+        exp = next(card for card in cards if card["g"] == "exp")
+        self.assertEqual((exp["t"], exp["out"], exp["ax"]), ("exponential", "exp", "what is inside"))
+        self.assertIn("multiplies the result by e", exp["n"])
+        # What is inside a bell's exp runs from -8 up to 0 as x crosses its range, so exp stays between 0 and 1.
+        self.assertEqual((exp["lo"], exp["hi"]), (-8.0, 0.0))
+        self.assertEqual(exp["ys"][-1], 1.0)
+        self.assertTrue(all(0 < y <= 1 for y in exp["ys"]))
+        # e to a power is the same function: its card goes to e when e has a row.
+        power = r"f(x)=e^{-x^{2}}"
+        e = next(card for card in self.cards(render_html(power, define=["e=Euler's number"])) if card["g"] == "e")
+        self.assertEqual((e["out"], e["hi"]), ("exp", 0.0))
+        ln = next(card for card in self.cards(render_html(r"S=k\ln W", legend=True)) if card["g"] == "ln")
+        self.assertEqual((ln["t"], ln["out"]), ("natural log", "ln"))
+        self.assertLess(ln["ys"][0], ln["ys"][-1])
+        # With no legend there is no row for exp, and so no card.
+        self.assertFalse(any(card.get("ax") for card in self.cards(render_html(bell, define=["f=the height"]))))
+
     def test_a_card_can_link_to_where_the_symbol_is_explained(self):
         from eqlens.engine import FormulaError
 

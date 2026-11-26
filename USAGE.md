@@ -105,6 +105,8 @@ eqlens --brief --define 'z_i=the raw score for class i' --set 'z_i=1:-2:4' --set
   -o softmax.html '\sigma(z)_i=\frac{e^{z_i}}{\sum_{j=1}^{K}e^{z_j}}'
 ```
 
+`\exp` and `\ln` are named in the ledger with `--legend`, each with a tip on how to think of it: each 1 added inside `exp` multiplies the result by about 2.718. Their cards draw the function alone, over the values that what is inside it really takes in this formula. In a bell curve the inside of `exp` never rises above 0, so the card shows a curve that climbs to 1 and no higher. `e` to a power gets the same card when `e` has a row (`--define "e=Euler's number"`).
+
 `--link 'KEY=URL words'` puts a link at the foot of that symbol's card, to a video or a page that explains it. The words after the URL are what the link says; without them it says the site's name. The symbol needs a ledger row, so give it a `--define`. Click or tap the symbol to pin its card, then follow the link.
 
 `--no-plot` keeps the words and leaves the plot out: use it for a formula of matrices or tensors, which reads as arithmetic but is not a curve. `--no-pop` leaves the cards out. The card's colors follow `--eq-pop-bg`, `--eq-pop-line`, `--eq-fg`, and `--eq-dim` if the page sets them.

@@ -15,6 +15,11 @@ one bar for the part and one for each of a few others, and as the symbol runs
 across its range its bar grows, the others shrink, and together they always
 come to 1. It is read from the shape of the formula, not from its name.
 
+A function the formula applies, ``\\exp`` or ``\\ln``, gets a card too when it
+has a ledger row: the curve of that function alone, over the values that what
+is inside it really takes in this formula. So the card for exp in a bell curve
+shows that its inside never rises above 0 and its result stays between 0 and 1.
+
 A card can carry a link to somewhere that explains the symbol further.
 
 ``cards`` makes the data, one item per ledger row. ``STYLE`` and ``SCRIPT`` go
@@ -121,12 +126,80 @@ def cards(
         if entry.get("step"):
             # It moves in steps: the card draws a dot for each and no line between.
             card["st"] = entry["step"]
+    _functions(spec, where, found)
     if output["key"]:
         index = where.get(_shape(output["key"]))
         now = _round(work_out(spec))
         if index is not None and now is not None and "ys" not in found[index]:
             found[index].update(now=now, u=output["unit"])
     return found
+
+
+_INSIDE = "what is inside"
+_APPLIED = {"exp": (r"\exp", math.exp), "ln": (r"\ln", math.log)}
+
+
+def _calls(node: tuple):
+    """Each place the expression applies exp or ln, as ``(name, what is inside)``. ``e`` to a power is exp."""
+    if not isinstance(node, tuple) or node[0] in ("num", "sym", "const"):
+        return
+    if node[0] == "call" and node[1] in _APPLIED:
+        yield node[1], node[2]
+    elif node[0] == "pow" and node[1] == ("const", "e"):
+        yield "exp", node[2]
+    for child in node[1:]:
+        yield from _calls(child)
+
+
+def _functions(spec: dict, where: dict[tuple, int], found: list[dict]) -> None:
+    """Give exp and ln their cards: the function alone, across what its inside takes as the symbols run their ranges."""
+    from eqlens.bench.expr import symbols_in, value
+    from eqlens.bench.spec import tree
+
+    env = {entry["key"]: entry["value"] for entry in spec["symbols"]}
+    ranges = {entry["key"]: (entry["min"], entry["max"]) for entry in spec["symbols"] if entry["role"] != "constant"}
+    done: set[int] = set()
+    for name, inside in _calls(tree(spec)):
+        key, apply = _APPLIED[name]
+        index = where.get(_shape(key))
+        if index is None and name == "exp":
+            # e^{...} has no \exp to point at: the card goes to e when the ledger has a row for it.
+            index = where.get(_shape("e"))
+        if index is None or index in done or "ys" in found[index]:
+            continue
+
+        def at(changes: dict) -> float | None:
+            try:
+                return _round(value(inside, {**env, **changes}))
+            except (FormulaError, ArithmeticError, ValueError):
+                return None
+
+        home = at({})
+        if home is None:
+            continue
+        seen = [home]
+        # The symbol the formula is drawn against, when it is in there. With none, every symbol in there has its turn.
+        inner = symbols_in(inside)
+        for symbol in [spec.get("sweep")] if spec.get("sweep") in inner else inner:
+            if symbol in ranges:
+                lo, hi = ranges[symbol]
+                seen += [at({symbol: lo + (hi - lo) * step / STEPS}) for step in range(STEPS + 1)]
+        seen = [x for x in seen if x is not None and (name != "ln" or x > 0)]
+        if not seen:
+            continue
+        lo, hi = min(seen), max(seen)
+        if hi - lo < 1e-9:
+            lo, hi = lo - 1.0, hi + 1.0
+            if name == "ln":
+                lo = max(lo, hi / 100)
+        try:
+            ys = [_round(apply(lo + (hi - lo) * step / STEPS)) for step in range(STEPS + 1)]
+        except (ArithmeticError, ValueError):
+            continue
+        if any(y is None for y in ys):
+            continue
+        done.add(index)
+        found[index].update(lo=lo, hi=hi, at=min(hi, max(lo, home)), ys=ys, out=name, ax=_INSIDE, u="", ou="")
 
 
 def _links(rows: Sequence[Symbol], found: list[dict], link: Sequence[str]) -> None:
@@ -348,13 +421,13 @@ function plot(p,c){var svg=p.querySelector('svg'),read=p.querySelector('.eqlens-
  else svg.appendChild(el('path',{d:d,fill:'none',stroke:ink,'stroke-width':2.2,'stroke-linejoin':'round','stroke-linecap':'round'}));
  svg.appendChild(el('text',{x:L,y:H-4},num(c.lo)));
  svg.appendChild(el('text',{x:W-R,y:H-4,'text-anchor':'end'},num(c.hi)));
- svg.appendChild(el('text',{x:W/2,y:H-4,'text-anchor':'middle'},c.g+unit(c.u)));
+ svg.appendChild(el('text',{x:W/2,y:H-4,'text-anchor':'middle'},(c.ax||c.g)+unit(c.u)));
  var hair=el('line',{y1:T,y2:H-B+4,stroke:ink,'stroke-opacity':.45}),dot=el('circle',{r:4.5,fill:ink,stroke:'var(--eq-pop-bg,#1c1f27)','stroke-width':2});
  svg.appendChild(hair);svg.appendChild(dot);
  put=function(u){if(c.st)u=Math.round(u*n)/n;var q=u*n,i=Math.min(n-1,Math.floor(q)),a=ys[i],b=ys[i+1],y=(a==null||b==null)?null:a+(b-a)*(q-i),x=c.lo+(c.hi-c.lo)*u;
   hair.setAttribute('x1',X(u));hair.setAttribute('x2',X(u));
   if(y==null){dot.style.display='none'}else{dot.style.display='';dot.setAttribute('cx',X(u));dot.setAttribute('cy',Y(y))}
-  read.textContent=c.g+' = '+num(x)+unit(c.u)+'  →  '+c.out+' = '+num(y)+(y==null?'':unit(c.ou))}}
+  read.textContent=(c.ax||c.g)+' = '+num(x)+unit(c.u)+'  →  '+c.out+' = '+num(y)+(y==null?'':unit(c.ou))}}
  var home=(c.hi>c.lo)?Math.max(0,Math.min(1,(c.at-c.lo)/(c.hi-c.lo))):.5;
  if(still){put(home);return}
  // Start where the symbol stands, then travel the range and back.
