@@ -3,6 +3,10 @@
 One file with no outside scripts. Pointing at a symbol in the drawing lights
 its slider, and pointing at a slider lights the symbol. Beside each slider is
 a small plot of the result as that symbol alone crosses its range.
+
+A function the formula applies, exp or ln, has a row of its own with no
+slider: what is inside it now, what comes out, and the function's curve with a
+dot that moves as the sliders do.
 """
 
 from __future__ import annotations
@@ -43,6 +47,8 @@ border-radius:6px;padding:5px 6px;font:inherit;font-variant-numeric:tabular-nums
 .row canvas{width:110px;height:38px;display:block}
 .row .means{grid-column:1/-1;color:var(--dim);font-size:13px;margin:0}
 .row.fixed{grid-template-columns:minmax(64px,auto) 1fr}
+.row.applied{grid-template-columns:minmax(64px,auto) 1fr 110px}
+.row.applied output{font-variant-numeric:tabular-nums}
 .bench.lit .row{opacity:.4}
 .bench.lit .row.on{opacity:1;border-color:var(--c)}
 .foot{color:var(--dim);font-size:13px;margin-top:16px}
@@ -99,7 +105,22 @@ function drawSpark(s,c){var q=size(c),g=q[0],w=q[1],h=q[2],d=run(s,v,60),ys=span
 var rows={};
 moving.forEach(function(s){var el=root.querySelector('.row[data-name="'+s.name+'"]');
  rows[s.name]={el:el,range:el.querySelector('input[type=range]'),num:el.querySelector('input[type=number]'),spark:el.querySelector('canvas')}});
-function draw(){drawMain();moving.forEach(function(s){drawSpark(s,rows[s.name].spark)})}
+// A function the formula applies: its own curve over what its inside takes as the plotted symbol crosses its range.
+var applied=[];root.querySelectorAll('.row.applied').forEach(function(el,i){
+ applied.push({a:APPLIED[i],out:el.querySelector('output'),spark:el.querySelector('canvas')})});
+function inside(a,env){var u;try{u=a.inside(env)}catch(e){u=NaN}return (typeof u==='number'&&isFinite(u))?u:NaN}
+function drawApplied(p){var a=p.a,fn=a.fn==='ln'?Math.log:Math.exp,e={},k,lo=Infinity,hi=-Infinity,now=inside(a,v);
+ for(k in v)e[k]=v[k];for(var i=0;i<=120;i++){e[sweep.name]=sweep.min+(sweep.max-sweep.min)*i/120;var u=inside(a,e);
+  if(!isNaN(u)&&(a.fn!=='ln'||u>0)){lo=Math.min(lo,u);hi=Math.max(hi,u)}}
+ if(!isNaN(now)&&(a.fn!=='ln'||now>0)){lo=Math.min(lo,now);hi=Math.max(hi,now)}
+ var y=(isNaN(now)||(a.fn==='ln'&&now<=0))?NaN:fn(now);
+ p.out.textContent=isNaN(y)?'no real value':'inside = '+fmt(now)+'  →  '+a.fn+' = '+fmt(y);
+ var q=size(p.spark),g=q[0],w=q[1],h=q[2];if(!(hi>=lo))return;if(hi-lo<1e-9){lo-=1;hi+=1;if(a.fn==='ln')lo=Math.max(lo,hi/100)}
+ var xs=[],ys=[];for(var j=0;j<=60;j++){var x=lo+(hi-lo)*j/60;xs.push(x);ys.push(fn(x))}
+ var s=span([ys]),X=function(x){return 3+(x-lo)/(hi-lo)*(w-6)},Y=function(t){return h-4-(t-s[0])/(s[1]-s[0])*(h-8)};
+ g.strokeStyle='#c9d1d9';g.lineWidth=1.6;g.lineJoin='round';path(g,xs,ys,X,Y);
+ if(!isNaN(y)){g.fillStyle='#f2f2f7';g.beginPath();g.arc(X(now),Y(y),3,0,7);g.fill()}}
+function draw(){drawMain();moving.forEach(function(s){drawSpark(s,rows[s.name].spark)});applied.forEach(drawApplied)}
 function set(s,x,from){if(!isFinite(x))return;if(s.step)x=s.min+Math.round((x-s.min)/s.step)*s.step;v[s.name]=x;var r=rows[s.name];
  if(from!==r.range)r.range.value=x;if(from!==r.num)r.num.value=num(x);draw()}
 moving.forEach(function(s){var r=rows[s.name];
@@ -129,6 +150,28 @@ window.addEventListener('resize',draw);draw();
 def _json(data) -> str:
     """JSON that is safe inside a script element."""
     return json.dumps(data, ensure_ascii=False).replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+
+
+def _applied(spec: dict, node: tuple) -> list[tuple[dict, tuple]]:
+    """Each of exp and ln the formula applies, once: its name, how it is said, the tip, its ledger row, and what is inside."""
+    from eqlens.constants import defines as constant_defines
+    from eqlens.legend import _NAMED, _shape, plain, plan
+    from eqlens.pop import _APPLIED, _calls
+
+    try:
+        define = constant_defines(list(spec["constant"])) + list(spec["define"])
+        _top, rows = plan(spec["tex"], legend=True, define=define, tier=spec["tier"], brief=True, known=False, shared=spec["shared"])
+    except FormulaError:
+        rows = []
+    said = {command: (name, hint) for command, name, hint in _NAMED}
+    found, seen = [], set()
+    for fn, inside in _calls(node):
+        if fn in seen:
+            continue
+        seen.add(fn)
+        index = next((i for i, row in enumerate(rows) if _shape(row.key) == _shape(_APPLIED[fn][0])), None)
+        found.append(({"fn": fn, "says": said[fn][0], "means": plain(said[fn][1]), "row": index}, inside))
+    return found
 
 
 def write(spec: dict, font: str = "sans") -> bytes:
@@ -176,6 +219,17 @@ def write(spec: dict, font: str = "sans") -> bytes:
             f'<div><input type="number" min="{entry["min"]!r}" max="{entry["max"]!r}" step="{fine}" value="{entry["value"]!r}" aria-label="{label}, as a number">{unit}</div>'
             f'<canvas aria-hidden="true"></canvas>{means}</div>'
         )
+    applied = []
+    for name, inside in _applied(spec, node):
+        row = "" if name["row"] is None else f' data-row="{name["row"]}"'
+        if name["row"] is not None:
+            lit.append(name["row"])
+        rows.append(
+            f'<div class="row applied"{row} style="--c:#c9d1d9"><div><span class="glyph">{esc(name["fn"])}</span>'
+            f'<span class="says">{esc(name["says"])}</span></div><output aria-live="off"></output>'
+            f'<canvas aria-hidden="true"></canvas><p class="means">{esc(name["means"])}</p></div>'
+        )
+        applied.append(f'{{fn:{_json(name["fn"])},inside:function(v){{return {to_js(inside, lambda key: "v." + names[key])}}}}}')
     # Pointing at a slider dims the drawing and lights that symbol in it.
     glow = "".join(
         f'.bench[data-lit="{index}"] .card svg :is(.f,.r){{opacity:.28}}.bench[data-lit="{index}"] .card svg .s{index}{{opacity:1}}'
@@ -206,7 +260,7 @@ def write(spec: dict, font: str = "sans") -> bytes:
         f'<div class="foot"><p>Worked out as {computed.strip()}</p><p>{esc(spec["checked"][:1].upper() + spec["checked"][1:])}. '
         "The dashed curve is where the bench started.</p></div>"
         "</main>\n"
-        f"<script>var SPEC={_json(data)};function F(v){{return {function}}}</script>\n"
+        f"<script>var SPEC={_json(data)};function F(v){{return {function}}}var APPLIED=[{','.join(applied)}];</script>\n"
         f"<script>{_JS}</script>\n</body></html>\n"
     )
     return page.encode("utf-8")

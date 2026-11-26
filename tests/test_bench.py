@@ -538,6 +538,16 @@ class McpTests(unittest.TestCase):
         answer = handle({"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": {"name": tool, "arguments": arguments}})
         return answer["result"]
 
+    def test_the_page_gives_exp_a_row_that_follows_the_sliders(self):
+        spec = build(GAUSS, sets=["x=0:-4:4"])
+        page = data(spec, "page").decode("utf-8")
+        self.assertIn('class="row applied"', page)
+        self.assertIn("exponential", page)
+        self.assertIn('var APPLIED=[{fn:"exp",inside:function(v){return ', page)
+        plain = data(build("F=ma"), "page").decode("utf-8")
+        self.assertNotIn('class="row applied"', plain)
+        self.assertIn("var APPLIED=[];", plain)
+
     def test_handshake_and_tool_list(self):
         answer = handle({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-03-26"}})
         self.assertEqual(answer["result"]["protocolVersion"], "2025-03-26")
